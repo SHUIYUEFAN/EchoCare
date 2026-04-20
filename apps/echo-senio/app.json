@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "echo-senio",
+    "slug": "echo-senio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "EchoCare 需要使用麦克风来识别注册用户声音。",
+        "NSCalendarsUsageDescription": "EchoCare 需要访问日历，用于用药和行程提醒。",
+        "NSPhotoLibraryUsageDescription": "EchoCare 需要访问相册，用于查看家庭照片与回忆。",
+        "NSPhotoLibraryAddUsageDescription": "EchoCare 需要保存和更新 AI 生成的卡通形象。"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.echosenio"
+    },
+    "plugins": [
+      "expo-av",
+      "expo-notifications",
+      "expo-image-picker",
+      "expo-media-library",
+      "expo-calendar"
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
