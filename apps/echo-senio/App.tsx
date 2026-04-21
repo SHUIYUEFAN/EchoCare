@@ -2,18 +2,266 @@ import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
 import * as Calendar from "expo-calendar";
 import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Animated, Easing, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { familyRoomChannel } from "@echocare/shared";
 
 type AppTab = "陪伴" | "確認" | "提醒" | "相冊" | "社區" | "檔案";
 type PhotoPreview = { id: string; uri: string; created?: string };
 type ParsedAlarm = { triggerAt: Date; message: string };
+type Locale = "zh" | "en" | "ja";
+type ChatRecord = { id: string; role: "assistant" | "user"; text: string; createdAt: number };
 
 const tabs: AppTab[] = ["陪伴", "確認", "提醒", "相冊", "社區", "檔案"];
+const localeByPhone = (phone: string): Locale => {
+  if (phone.startsWith("+86")) return "zh";
+  if (phone.startsWith("+81")) return "ja";
+  return "en";
+};
+
+const I18N = {
+  zh: {
+    loginTitle: "EchoCare 登录",
+    loginHint: "请输入手机号（含国家区号）与密码",
+    phonePlaceholder: "手机号，例如 +8613812345678",
+    passwordPlaceholder: "密码",
+    loginBtn: "登录",
+    loginError: "请输入有效手机号和密码",
+    localeTip: "已根据手机号切换语言",
+    tabCompanion: "陪伴",
+    tabConfirm: "确认",
+    tabReminder: "提醒",
+    tabAlbum: "相册",
+    tabCommunity: "社区",
+    tabProfile: "档案",
+    waitingAction: "等待操作",
+    wakeupHint: "说“小美”来唤醒我",
+    uploadPhoto: "上传照片",
+    genAvatar: "生成形象",
+    voiceRegister: "注册声纹",
+    voiceStart: "开启监听",
+    voiceStop: "停止监听",
+    alarmSet: "设定提醒",
+    profileNext: "下一步",
+    tipTitle: "提示",
+    errorTitle: "错误",
+    micPermissionDenied: "未授予麦克风权限",
+    recordFailed: "录音失败",
+    timeNotUnderstood: "没听懂时间，请说“明天早上7点半提醒我吃药”",
+    webNoReminder: "Web 不支持本地提醒，请用 Android/iOS",
+    notificationPermissionDenied: "未授予通知权限",
+    reminderCreated: "提醒已建立成功",
+    reminderSetFailedTitle: "提醒设定失败",
+    albumPermissionDenied: "未授予相簿权限，无法选择照片",
+    albumPicked: "已选择照片，可以生成形象",
+    albumOpenFailed: "打开相册失败",
+    uploadPhotoFirst: "请先上传人物照片",
+    avatarCloudFailed: "卡通形象生成失败",
+    avatarCloudSuccess: "已生成 AI 2D 形象（云端）",
+    avatarLocalFailed: "本地形象生成失败",
+    avatarOfflineFallback: "网络不可用，已改用本地模式生成形象",
+    avatarFailed: "生成失败",
+    avatarFailedTitle: "生成失败",
+    webNoMic: "Web 不支持麦克风录音",
+    voiceRegistering: "注册中...",
+    voiceRegisterFailed: "声纹注册失败",
+    voiceRegistered: "已注册",
+    voiceRegisterSuccess: "声纹注册成功",
+    voiceRegisterFailedTitle: "注册失败",
+    registerFirstBeforeListen: "请先注册声纹再开启监听",
+    listeningStarted: "监听已开启",
+    recognized: "已识别注册用户",
+    unmatched: "未匹配",
+    recognizedLog: "识别成功",
+    listeningInterrupted: "监听中断",
+    listeningTitle: "监听",
+    listeningStopped: "监听已停止",
+    webNoAlbum: "Web 不支持相册 API",
+    albumReadFailed: "读取相册失败",
+    albumLoaded: "已载入照片",
+    webNoCalendar: "Web 不支持日历 API",
+    calendarPermissionDenied: "未授予日历权限",
+    noEventToday: "今天没有日程",
+    calendarToReminderSuccess: "已从日历生成提醒",
+    calendarReadFailed: "读取日历失败",
+    confirmApproved: "已确认，准备下单",
+    confirmApprovedFeedback: "已为您确认商品，正在提交代购订单",
+    confirmCancelled: "已取消",
+    confirmCancelledFeedback: "已取消本次代购",
+    completeProfileFirst: "请先完成基本资料",
+    profileSaved: "资料已保存",
+    communityJoined: "已帮您加入活动",
+    communityLater: "好的，下次再提醒您",
+    unknownCommand: "未识别指令",
+    reminderAcked: "已确认提醒",
+    localeSwitched: "已根据手机号切换语言",
+    voiceUnregistered: "未注册",
+    apiSwitched: "API 已切换到",
+    noHistory: "暂无历史对话，开始说话后会记录在这里",
+  },
+  en: {
+    loginTitle: "EchoCare Sign In",
+    loginHint: "Enter phone number (with country code) and password",
+    phonePlaceholder: "Phone number, e.g. +14155550123",
+    passwordPlaceholder: "Password",
+    loginBtn: "Sign In",
+    loginError: "Please enter a valid phone number and password",
+    localeTip: "Language switched by phone number",
+    tabCompanion: "Companion",
+    tabConfirm: "Confirm",
+    tabReminder: "Reminder",
+    tabAlbum: "Album",
+    tabCommunity: "Community",
+    tabProfile: "Profile",
+    waitingAction: "Waiting for action",
+    wakeupHint: 'Say "Xiaomei" to wake me',
+    uploadPhoto: "Upload Photo",
+    genAvatar: "Generate Avatar",
+    voiceRegister: "Register Voice",
+    voiceStart: "Start Listening",
+    voiceStop: "Stop Listening",
+    alarmSet: "Set Reminder",
+    profileNext: "Next",
+    tipTitle: "Tip",
+    errorTitle: "Error",
+    micPermissionDenied: "Microphone permission denied",
+    recordFailed: "Recording failed",
+    timeNotUnderstood: 'Could not parse time, try "Remind me at 7:30 tomorrow morning"',
+    webNoReminder: "Local reminders are not supported on Web. Use Android/iOS.",
+    notificationPermissionDenied: "Notification permission denied",
+    reminderCreated: "Reminder created successfully",
+    reminderSetFailedTitle: "Reminder setup failed",
+    albumPermissionDenied: "Photo permission denied",
+    albumPicked: "Photo selected, ready to generate avatar",
+    albumOpenFailed: "Failed to open gallery",
+    uploadPhotoFirst: "Please upload a portrait first",
+    avatarCloudFailed: "Avatar generation failed",
+    avatarCloudSuccess: "AI 2D avatar generated (cloud)",
+    avatarLocalFailed: "Local avatar generation failed",
+    avatarOfflineFallback: "Network unavailable, generated avatar in local mode",
+    avatarFailed: "Generation failed",
+    avatarFailedTitle: "Generation Failed",
+    webNoMic: "Microphone recording is not supported on Web",
+    voiceRegistering: "Registering...",
+    voiceRegisterFailed: "Voice registration failed",
+    voiceRegistered: "Registered",
+    voiceRegisterSuccess: "Voice registered successfully",
+    voiceRegisterFailedTitle: "Registration Failed",
+    registerFirstBeforeListen: "Please register voice before listening",
+    listeningStarted: "Listening started",
+    recognized: "Registered user recognized",
+    unmatched: "Not matched",
+    recognizedLog: "Recognized",
+    listeningInterrupted: "Listening interrupted",
+    listeningTitle: "Listening",
+    listeningStopped: "Listening stopped",
+    webNoAlbum: "Album API is not supported on Web",
+    albumReadFailed: "Failed to read album",
+    albumLoaded: "Photos loaded",
+    webNoCalendar: "Calendar API is not supported on Web",
+    calendarPermissionDenied: "Calendar permission denied",
+    noEventToday: "No events today",
+    calendarToReminderSuccess: "Reminder generated from calendar",
+    calendarReadFailed: "Failed to read calendar",
+    confirmApproved: "Confirmed, placing order",
+    confirmApprovedFeedback: "Order confirmed and submitting",
+    confirmCancelled: "Cancelled",
+    confirmCancelledFeedback: "Order cancelled",
+    completeProfileFirst: "Please complete profile information",
+    profileSaved: "Profile saved",
+    communityJoined: "Joined the group",
+    communityLater: "Okay, remind me next time",
+    unknownCommand: "Unknown command",
+    reminderAcked: "Reminder acknowledged",
+    localeSwitched: "Language switched by phone number",
+    voiceUnregistered: "Not registered",
+    apiSwitched: "API switched to",
+    noHistory: "No conversation history yet. Start speaking to create records.",
+  },
+  ja: {
+    loginTitle: "EchoCare ログイン",
+    loginHint: "国番号付きの電話番号とパスワードを入力してください",
+    phonePlaceholder: "電話番号 例: +819012345678",
+    passwordPlaceholder: "パスワード",
+    loginBtn: "ログイン",
+    loginError: "有効な電話番号とパスワードを入力してください",
+    localeTip: "電話番号に基づいて言語を切り替えました",
+    tabCompanion: "会話",
+    tabConfirm: "確認",
+    tabReminder: "通知",
+    tabAlbum: "アルバム",
+    tabCommunity: "コミュニティ",
+    tabProfile: "プロフィール",
+    waitingAction: "操作待機中",
+    wakeupHint: "「シャオメイ」と話しかけて起動",
+    uploadPhoto: "写真を選ぶ",
+    genAvatar: "アバター生成",
+    voiceRegister: "音声登録",
+    voiceStart: "監聴開始",
+    voiceStop: "監聴停止",
+    alarmSet: "通知を設定",
+    profileNext: "次へ",
+    tipTitle: "ヒント",
+    errorTitle: "エラー",
+    micPermissionDenied: "マイク権限がありません",
+    recordFailed: "録音に失敗しました",
+    timeNotUnderstood: "時間を解析できません。「明日の朝7時半に薬を通知して」のように入力してください",
+    webNoReminder: "Web ではローカル通知を利用できません。Android/iOS を使用してください",
+    notificationPermissionDenied: "通知権限がありません",
+    reminderCreated: "通知を作成しました",
+    reminderSetFailedTitle: "通知設定失敗",
+    albumPermissionDenied: "写真権限がありません",
+    albumPicked: "写真を選択しました。アバター生成できます",
+    albumOpenFailed: "アルバムを開けませんでした",
+    uploadPhotoFirst: "先に人物写真をアップロードしてください",
+    avatarCloudFailed: "アバター生成に失敗しました",
+    avatarCloudSuccess: "AI 2D アバター生成完了（クラウド）",
+    avatarLocalFailed: "ローカル生成に失敗しました",
+    avatarOfflineFallback: "ネットワーク不可のためローカル生成に切り替えました",
+    avatarFailed: "生成失敗",
+    avatarFailedTitle: "生成失敗",
+    webNoMic: "Web ではマイク録音を利用できません",
+    voiceRegistering: "登録中...",
+    voiceRegisterFailed: "音声登録に失敗しました",
+    voiceRegistered: "登録済み",
+    voiceRegisterSuccess: "音声登録に成功しました",
+    voiceRegisterFailedTitle: "登録失敗",
+    registerFirstBeforeListen: "先に音声登録してください",
+    listeningStarted: "監聴を開始しました",
+    recognized: "登録ユーザーを認識",
+    unmatched: "不一致",
+    recognizedLog: "認識成功",
+    listeningInterrupted: "監聴が中断されました",
+    listeningTitle: "監聴",
+    listeningStopped: "監聴を停止しました",
+    webNoAlbum: "Web ではアルバム API を利用できません",
+    albumReadFailed: "アルバム読み込み失敗",
+    albumLoaded: "写真を読み込みました",
+    webNoCalendar: "Web ではカレンダー API を利用できません",
+    calendarPermissionDenied: "カレンダー権限がありません",
+    noEventToday: "本日の予定はありません",
+    calendarToReminderSuccess: "カレンダーから通知を作成しました",
+    calendarReadFailed: "カレンダー読み込み失敗",
+    confirmApproved: "確認済み、注文処理中",
+    confirmApprovedFeedback: "商品を確認し、注文処理を開始しました",
+    confirmCancelled: "キャンセル済み",
+    confirmCancelledFeedback: "今回の注文をキャンセルしました",
+    completeProfileFirst: "プロフィールを先に入力してください",
+    profileSaved: "プロフィールを保存しました",
+    communityJoined: "活動に参加しました",
+    communityLater: "了解です。次回またお知らせします",
+    unknownCommand: "未認識コマンド",
+    reminderAcked: "通知を確認しました",
+    localeSwitched: "電話番号に基づいて言語を切り替えました",
+    voiceUnregistered: "未登録",
+    apiSwitched: "API を切り替え:",
+    noHistory: "会話履歴はまだありません。話し始めるとここに記録されます。",
+  },
+} as const;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,10 +274,27 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   const channel = useMemo(() => familyRoomChannel("demo-family"), []);
+  const [locale, setLocale] = useState<Locale>("en");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [countryCode, setCountryCode] = useState("+86");
+  const [showCountryMenu, setShowCountryMenu] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [smsCodeInput, setSmsCodeInput] = useState("");
+  const [debugCodeHint, setDebugCodeHint] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>("陪伴");
-  const [info, setInfo] = useState("說「小美」來喚醒我");
+  const t = I18N[locale];
+  const tabLabel = (tab: AppTab) => {
+    if (tab === "陪伴") return t.tabCompanion;
+    if (tab === "確認") return t.tabConfirm;
+    if (tab === "提醒") return t.tabReminder;
+    if (tab === "相冊") return t.tabAlbum;
+    if (tab === "社區") return t.tabCommunity;
+    return t.tabProfile;
+  };
+  const [info, setInfo] = useState<string>(t.wakeupHint);
   const [busy, setBusy] = useState(false);
-  const [voiceState, setVoiceState] = useState("未註冊");
+  const [voiceState, setVoiceState] = useState<string>(t.voiceUnregistered);
   const [listening, setListening] = useState(false);
   const listeningRef = useRef(false);
 
@@ -45,6 +310,7 @@ export default function App() {
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const [randomizeOnAlbumEnter, setRandomizeOnAlbumEnter] = useState(true);
   const [communityChoice, setCommunityChoice] = useState("尚未決定");
 
   const [profileGender, setProfileGender] = useState<"男" | "女" | "">("");
@@ -52,12 +318,26 @@ export default function App() {
   const [hasCondition, setHasCondition] = useState<"有" | "沒有" | "">("");
   const [voiceCommand, setVoiceCommand] = useState("");
   const [showConfirmCard, setShowConfirmCard] = useState(true);
-  const [actionLog, setActionLog] = useState("等待操作");
+  const [actionLog, setActionLog] = useState<string>(t.waitingAction);
+  const [chatHistory, setChatHistory] = useState<ChatRecord[]>([]);
+  const chatHistoryPath = `${FileSystem.documentDirectory ?? ""}echocare-chat-history.json`;
+  const avatarFloat = useRef(new Animated.Value(0)).current;
+  const companionScrollY = useRef(new Animated.Value(0)).current;
+  const speakingRipple = useRef(new Animated.Value(0)).current;
+  const autoAlbumLoadingRef = useRef(false);
 
   const unsupportedOnWeb = Platform.OS === "web";
-  const apiBase =
+  const configuredApiBase =
     process.env.EXPO_PUBLIC_API_BASE_URL ||
     (Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001");
+  const [resolvedApiBase, setResolvedApiBase] = useState(configuredApiBase);
+  const apiCandidates = useMemo(() => {
+    const defaults =
+      Platform.OS === "android"
+        ? ["http://10.0.2.2:3001", "http://10.0.3.2:3001", "http://127.0.0.1:3001", "http://localhost:3001"]
+        : ["http://localhost:3001", "http://127.0.0.1:3001"];
+    return Array.from(new Set([configuredApiBase, ...defaults]));
+  }, [configuredApiBase]);
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -72,17 +352,190 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        if (!FileSystem.documentDirectory) return;
+        const info = await FileSystem.getInfoAsync(chatHistoryPath);
+        if (!info.exists) return;
+        const raw = await FileSystem.readAsStringAsync(chatHistoryPath);
+        const parsed = JSON.parse(raw) as ChatRecord[];
+        if (Array.isArray(parsed)) setChatHistory(parsed.slice(-50));
+      } catch {
+        // ignore corrupted history
+      }
+    };
+    void loadHistory();
+  }, [chatHistoryPath]);
+
+  const persistHistory = async (records: ChatRecord[]) => {
+    try {
+      if (!FileSystem.documentDirectory) return;
+      await FileSystem.writeAsStringAsync(chatHistoryPath, JSON.stringify(records));
+    } catch {
+      // best effort persistence only
+    }
+  };
+
+  const appendHistory = (role: ChatRecord["role"], text: string) => {
+    const item: ChatRecord = { id: `${Date.now()}-${Math.random()}`, role, text, createdAt: Date.now() };
+    setChatHistory((prev) => {
+      const next = [...prev, item].slice(-50);
+      void persistHistory(next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (activeTab === "相冊" && photos.length && randomizeOnAlbumEnter) {
+      const randomIdx = Math.floor(Math.random() * photos.length);
+      setAlbumIndex(randomIdx);
+    }
+  }, [activeTab, photos, randomizeOnAlbumEnter]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(avatarFloat, {
+          toValue: 1,
+          duration: 2200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(avatarFloat, {
+          toValue: 0,
+          duration: 2200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [avatarFloat]);
+
+  useEffect(() => {
+    const rippleLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(speakingRipple, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(speakingRipple, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    rippleLoop.start();
+    return () => rippleLoop.stop();
+  }, [speakingRipple]);
+
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const fetchWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 20000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const requestApi = async (path: string, init?: RequestInit) => {
+    const ordered = [resolvedApiBase, ...apiCandidates.filter((b) => b !== resolvedApiBase)];
+    let lastError: unknown;
+    for (const base of ordered) {
+      try {
+        const res = await fetchWithTimeout(`${base}${path}`, init);
+        if (res.status < 500) {
+          if (base !== resolvedApiBase) {
+            setResolvedApiBase(base);
+            setActionLog(`${t.apiSwitched} ${base}`);
+          }
+          return res;
+        }
+        lastError = new Error(`HTTP ${res.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error
+      ? new Error(`Network request failed: ${lastError.message}`)
+      : new Error("Network request failed");
+  };
 
   const feedback = (message: string, title = "提示") => {
     setInfo(message);
     setActionLog(message);
+    appendHistory("assistant", message);
     Alert.alert(title, message);
+  };
+
+  const fullPhone = `${countryCode}${phoneInput.trim()}`;
+  const sendSmsCode = async () => {
+    if (!/^\d{5,14}$/.test(phoneInput.trim())) {
+      Alert.alert("Invalid Phone", "Please enter a valid phone number.");
+      return;
+    }
+    // SMS sending is temporarily disabled for local demo.
+    // try {
+    //   setBusy(true);
+    //   const response = await requestApi("/v1/auth/send-code", {
+    //     method: "POST",
+    //     headers: { "content-type": "application/json" },
+    //     body: JSON.stringify({ phone: fullPhone }),
+    //   });
+    //   const payload = (await response.json()) as { success?: boolean; debugCode?: string; error?: string };
+    //   if (!response.ok || !payload.success) throw new Error(payload.error || "Failed to send verification code.");
+    //   setCodeSent(true);
+    //   setDebugCodeHint(payload.debugCode ? `Dev code: ${payload.debugCode}` : "");
+    //   Alert.alert("Code Sent", "Verification code sent. Please check your messages.");
+    // } catch (error) {
+    //   Alert.alert("Send Failed", error instanceof Error ? error.message : "Failed to send verification code.");
+    // } finally {
+    //   setBusy(false);
+    // }
+    setCodeSent(true);
+    setDebugCodeHint("Demo mode: enter any 6-digit code to sign in.");
+    Alert.alert("Demo Mode", "SMS sending is disabled. Enter any 6-digit code to continue.");
+  };
+
+  const handleLogin = async () => {
+    if (!codeSent || !/^\d{6}$/.test(smsCodeInput.trim())) {
+      Alert.alert("Invalid Code", "Please enter the verification code.");
+      return;
+    }
+    // Verification API is temporarily disabled for local demo.
+    // try {
+    //   setBusy(true);
+    //   const response = await requestApi("/v1/auth/verify-code", {
+    //     method: "POST",
+    //     headers: { "content-type": "application/json" },
+    //     body: JSON.stringify({ phone: fullPhone, code: smsCodeInput.trim() }),
+    //   });
+    //   const payload = (await response.json()) as { success?: boolean; error?: string };
+    //   if (!response.ok || !payload.success) throw new Error(payload.error || "Verification failed.");
+    // } catch (error) {
+    //   Alert.alert("Login Failed", error instanceof Error ? error.message : "Verification failed.");
+    //   return;
+    // } finally {
+    //   setBusy(false);
+    // }
+    const detected = localeByPhone(fullPhone);
+    setLocale(detected);
+    setIsLoggedIn(true);
+    const nextT = I18N[detected];
+    setInfo(nextT.wakeupHint);
+    setActionLog(nextT.localeSwitched);
   };
 
   const recordClip = async (durationMs: number) => {
     const permission = await Audio.requestPermissionsAsync();
-    if (!permission.granted) throw new Error("未授予麥克風權限");
+    if (!permission.granted) throw new Error(t.micPermissionDenied);
     await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
     const recording = new Audio.Recording();
     await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
@@ -90,15 +543,38 @@ export default function App() {
     await sleep(durationMs);
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
-    if (!uri) throw new Error("錄音失敗");
+    if (!uri) throw new Error(t.recordFailed);
     return uri;
   };
 
   const parseAlarmCommand = (raw: string): ParsedAlarm => {
-    const text = raw.replace(/\s+/g, "");
+    const normalizeChineseTime = (input: string) => {
+      const digitMap: Record<string, string> = {
+        零: "0",
+        一: "1",
+        二: "2",
+        两: "2",
+        兩: "2",
+        三: "3",
+        四: "4",
+        五: "5",
+        六: "6",
+        七: "7",
+        八: "8",
+        九: "9",
+      };
+      let out = input;
+      out = out.replace(/十([一二两兩三四五六七八九])/g, (_, a: string) => `1${digitMap[a]}`);
+      out = out.replace(/([二三四五六七八九])十/g, (_, a: string) => `${digitMap[a]}0`);
+      out = out.replace(/十/g, "10");
+      out = out.replace(/[零一二两兩三四五六七八九]/g, (m) => digitMap[m] ?? m);
+      return out;
+    };
+
+    const text = normalizeChineseTime(raw.replace(/\s+/g, ""));
     const now = new Date();
     const hmMatch = text.match(/(\d{1,2})(?:[:：]|點)([0-5]?\d|半)?(?:分)?/);
-    if (!hmMatch) throw new Error("沒聽懂時間，請說「明天早上7點半提醒我吃藥」");
+    if (!hmMatch) throw new Error(t.timeNotUnderstood);
     let hour = Number(hmMatch[1]);
     let minute = hmMatch[2] === "半" ? 30 : hmMatch[2] ? Number(hmMatch[2]) : 0;
     if (/下午|晚上/.test(text) && hour < 12) hour += 12;
@@ -108,19 +584,23 @@ export default function App() {
     triggerAt.setDate(now.getDate() + dayOffset);
     triggerAt.setHours(hour, minute, 0, 0);
     if (dayOffset === 0 && triggerAt <= now) triggerAt.setDate(triggerAt.getDate() + 1);
-    const message = text.match(/提醒(?:我)?(.+)/)?.[1] || "時間到囉";
+    const message =
+      text.match(/提醒(?:我)?(.+)/)?.[1] ||
+      text.match(/叫(?:我)?(.+)/)?.[1] ||
+      text.match(/通知(?:我)?(.+)/)?.[1] ||
+      "時間到囉";
     return { triggerAt, message };
   };
 
   const scheduleAlarm = async () => {
     if (unsupportedOnWeb) {
-      feedback("Web 不支援本地提醒，請用 Android/iOS");
+      feedback(t.webNoReminder, t.tipTitle);
       return;
     }
     try {
       setBusy(true);
       const perm = await Notifications.requestPermissionsAsync();
-      if (!perm.granted) throw new Error("未授予通知權限");
+      if (!perm.granted) throw new Error(t.notificationPermissionDenied);
       const parsed = parseAlarmCommand(alarmCommand);
       await Notifications.scheduleNotificationAsync({
         content: { title: "EchoCare 用藥提醒", body: parsed.message, sound: true },
@@ -133,12 +613,12 @@ export default function App() {
       setReminderText(parsed.message);
       setReminderAcked(false);
       setAlarmStatus(`${parsed.triggerAt.toLocaleString()} · ${parsed.message}`);
-      feedback("提醒已建立成功");
+      feedback(t.reminderCreated, t.tipTitle);
       setActiveTab("提醒");
     } catch (error) {
       const message = error instanceof Error ? error.message : "設定提醒失敗";
       setAlarmStatus(`設定失敗：${message}`);
-      feedback(message, "提醒設定失敗");
+      feedback(message, t.reminderSetFailedTitle);
     } finally {
       setBusy(false);
     }
@@ -148,7 +628,7 @@ export default function App() {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        feedback("未授予相簿權限，無法選擇照片");
+        feedback(t.albumPermissionDenied, t.tipTitle);
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -158,16 +638,16 @@ export default function App() {
       });
       if (!result.canceled) {
         setSourcePhotoUri(result.assets[0].uri);
-        feedback("已選擇照片，可以生成形象");
+        feedback(t.albumPicked, t.tipTitle);
       }
     } catch (error) {
-      feedback(error instanceof Error ? error.message : "打開相冊失敗");
+      feedback(error instanceof Error ? error.message : t.albumOpenFailed, t.tipTitle);
     }
   };
 
   const generateAvatar = async () => {
     if (!sourcePhotoUri) {
-      setInfo("請先上傳人物照片");
+      setInfo(t.uploadPhotoFirst);
       return;
     }
     try {
@@ -175,17 +655,29 @@ export default function App() {
       const imageBase64 = await FileSystem.readAsStringAsync(sourcePhotoUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      const response = await fetch(`${apiBase}/v1/avatar/generate`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ imageBase64 }),
-      });
-      const payload = (await response.json()) as { imageDataUrl?: string };
-      if (!response.ok || !payload.imageDataUrl) throw new Error("卡通形象生成失敗");
-      setAvatarUri(payload.imageDataUrl);
-      feedback("已生成 AI 2D 形象");
+      try {
+        const response = await requestApi("/v1/avatar/generate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ imageBase64 }),
+        });
+        const payload = (await response.json()) as { imageDataUrl?: string };
+        if (!response.ok || !payload.imageDataUrl) throw new Error(t.avatarCloudFailed);
+        setAvatarUri(payload.imageDataUrl);
+        feedback(t.avatarCloudSuccess, t.tipTitle);
+      } catch {
+        // Offline fallback: local stylization so users can continue even when API is unreachable.
+        const local = await ImageManipulator.manipulateAsync(
+          sourcePhotoUri,
+          [{ resize: { width: 512 } }],
+          { compress: 0.9, format: ImageManipulator.SaveFormat.PNG, base64: true }
+        );
+        if (!local.base64) throw new Error(t.avatarLocalFailed);
+        setAvatarUri(`data:image/png;base64,${local.base64}`);
+        feedback(t.avatarOfflineFallback, t.tipTitle);
+      }
     } catch (error) {
-      feedback(error instanceof Error ? error.message : "生成失敗", "生成失敗");
+      feedback(error instanceof Error ? error.message : t.avatarFailed, t.avatarFailedTitle);
     } finally {
       setBusy(false);
     }
@@ -193,28 +685,28 @@ export default function App() {
 
   const registerVoice = async () => {
     if (unsupportedOnWeb) {
-      feedback("Web 不支援麥克風錄音");
+      feedback(t.webNoMic, t.tipTitle);
       return;
     }
     try {
       setBusy(true);
-      setVoiceState("註冊中...");
+      setVoiceState(t.voiceRegistering);
       const clipUri = await recordClip(3500);
       const audioBase64 = await FileSystem.readAsStringAsync(clipUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      const response = await fetch(`${apiBase}/v1/voice/register`, {
+      const response = await requestApi("/v1/voice/register", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ familyId: "demo-family", profileId: "elder-main", audioBase64 }),
       });
       const payload = (await response.json()) as { success?: boolean };
-      if (!response.ok || !payload.success) throw new Error("聲紋註冊失敗");
-      setVoiceState("已註冊");
-      feedback("聲紋註冊成功");
+      if (!response.ok || !payload.success) throw new Error(t.voiceRegisterFailed);
+      setVoiceState(t.voiceRegistered);
+      feedback(t.voiceRegisterSuccess, t.tipTitle);
     } catch (error) {
-      setVoiceState("註冊失敗");
-      feedback(error instanceof Error ? error.message : "聲紋註冊失敗", "註冊失敗");
+      setVoiceState(t.voiceRegisterFailed);
+      feedback(error instanceof Error ? error.message : t.voiceRegisterFailed, t.voiceRegisterFailedTitle);
     } finally {
       setBusy(false);
     }
@@ -222,53 +714,53 @@ export default function App() {
 
   const startVoiceMonitoring = async () => {
     if (unsupportedOnWeb) {
-      feedback("Web 不支援麥克風錄音");
+      feedback(t.webNoMic, t.tipTitle);
       return;
     }
-    if (voiceState !== "已註冊") {
-      feedback("請先註冊聲紋再開啟監聽");
+    if (voiceState !== t.voiceRegistered) {
+      feedback(t.registerFirstBeforeListen, t.tipTitle);
       return;
     }
     listeningRef.current = true;
     setListening(true);
-    setActionLog("監聽已開啟");
+    setActionLog(t.listeningStarted);
     while (listeningRef.current) {
       try {
         const clipUri = await recordClip(3000);
         const audioBase64 = await FileSystem.readAsStringAsync(clipUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        const response = await fetch(`${apiBase}/v1/voice/verify`, {
+        const response = await requestApi("/v1/voice/verify", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ familyId: "demo-family", profileId: "elder-main", audioBase64 }),
         });
         const payload = (await response.json()) as { matched: boolean; score: number };
         if (payload.matched) {
-          setInfo(`已識別註冊用戶（${payload.score.toFixed(2)}）`);
-          setActionLog(`識別成功（${payload.score.toFixed(2)}）`);
+          setInfo(`${t.recognized} (${payload.score.toFixed(2)})`);
+          setActionLog(`${t.recognizedLog} (${payload.score.toFixed(2)})`);
         } else {
-          setInfo(`未匹配（${payload.score.toFixed(2)}）`);
-          setActionLog(`未匹配（${payload.score.toFixed(2)}）`);
+          setInfo(`${t.unmatched} (${payload.score.toFixed(2)})`);
+          setActionLog(`${t.unmatched} (${payload.score.toFixed(2)})`);
         }
       } catch {
-        feedback("監聽中斷", "監聽");
+        feedback(t.listeningInterrupted, t.listeningTitle);
         break;
       }
     }
     listeningRef.current = false;
     setListening(false);
-    setActionLog("監聽已停止");
+    setActionLog(t.listeningStopped);
   };
 
-  const readLatestPhotos = async () => {
+  const readLatestPhotos = async (switchToAlbum = true, showToast = true) => {
     if (unsupportedOnWeb) {
-      feedback("Web 不支援相冊 API");
+      feedback(t.webNoAlbum, t.tipTitle);
       return;
     }
     try {
       const permission = await MediaLibrary.requestPermissionsAsync();
-      if (!permission.granted) throw new Error("未授予相冊權限");
+      if (!permission.granted) throw new Error(t.albumPermissionDenied);
       const res = await MediaLibrary.getAssetsAsync({
         mediaType: MediaLibrary.MediaType.photo,
         first: 12,
@@ -280,22 +772,39 @@ export default function App() {
         created: asset.creationTime ? new Date(asset.creationTime).toLocaleDateString() : undefined,
       }));
       setPhotos(mapped);
-      setAlbumIndex(0);
-      feedback(`已載入 ${mapped.length} 張照片`);
-      setActiveTab("相冊");
+      const randomIdx = mapped.length ? Math.floor(Math.random() * mapped.length) : 0;
+      setAlbumIndex(randomIdx);
+      if (showToast) feedback(`${t.albumLoaded} ${mapped.length}`, t.tipTitle);
+      if (switchToAlbum) setActiveTab("相冊");
     } catch (error) {
-      feedback(error instanceof Error ? error.message : "讀取相冊失敗", "相冊");
+      feedback(error instanceof Error ? error.message : t.albumReadFailed, t.tabAlbum);
     }
   };
 
+  useEffect(() => {
+    if (!isLoggedIn || unsupportedOnWeb || photos.length > 0 || autoAlbumLoadingRef.current) return;
+    autoAlbumLoadingRef.current = true;
+    void readLatestPhotos(false, false).finally(() => {
+      autoAlbumLoadingRef.current = false;
+    });
+  }, [isLoggedIn, photos.length, unsupportedOnWeb]);
+
+  useEffect(() => {
+    if (activeTab !== "相冊" || unsupportedOnWeb || photos.length > 0 || autoAlbumLoadingRef.current) return;
+    autoAlbumLoadingRef.current = true;
+    void readLatestPhotos(false, false).finally(() => {
+      autoAlbumLoadingRef.current = false;
+    });
+  }, [activeTab, photos.length, unsupportedOnWeb]);
+
   const loadTodayEventAsReminder = async () => {
     if (unsupportedOnWeb) {
-      feedback("Web 不支援日曆 API");
+      feedback(t.webNoCalendar, t.tipTitle);
       return;
     }
     try {
       const permission = await Calendar.requestCalendarPermissionsAsync();
-      if (!permission.granted) throw new Error("未授予日曆權限");
+      if (!permission.granted) throw new Error(t.calendarPermissionDenied);
       const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
       const start = new Date();
       const end = new Date(start.getTime() + 1000 * 60 * 60 * 24);
@@ -307,42 +816,50 @@ export default function App() {
           )
         : [];
       const first = events[0];
-      if (!first) throw new Error("今天沒有日程");
+      if (!first) throw new Error(t.noEventToday);
       setReminderText(first.title || "行程提醒");
       setReminderAcked(false);
       setActiveTab("提醒");
-      feedback("已從日曆生成提醒");
+      feedback(t.calendarToReminderSuccess, t.tipTitle);
     } catch (error) {
-      feedback(error instanceof Error ? error.message : "讀取日曆失敗", "日曆");
+      feedback(error instanceof Error ? error.message : t.calendarReadFailed, t.tabReminder);
     }
   };
 
   const handleConfirmOrder = async () => {
-    setConfirmStatus("已確認，準備下單");
+    setConfirmStatus(t.confirmApproved);
     setShowConfirmCard(false);
-    feedback("已為您確認商品，正在提交代購訂單");
+    feedback(t.confirmApprovedFeedback, t.tipTitle);
     setActiveTab("陪伴");
   };
 
   const handleCancelOrder = () => {
-    setConfirmStatus("已取消");
+    setConfirmStatus(t.confirmCancelled);
     setShowConfirmCard(false);
-    feedback("已取消本次代購");
+    feedback(t.confirmCancelledFeedback, t.tipTitle);
     setActiveTab("陪伴");
   };
 
   const saveProfile = () => {
     if (!profileGender || !profileAge || !hasCondition) {
-      feedback("請先完成基本資料");
+      feedback(t.completeProfileFirst, t.tipTitle);
       return;
     }
-    feedback(`資料已保存：${profileGender} / ${profileAge} / 基礎病${hasCondition}`);
+    feedback(`${t.profileSaved}: ${profileGender} / ${profileAge} / ${hasCondition}`, t.tipTitle);
     setActiveTab("陪伴");
   };
 
   const executeVoiceCommand = async () => {
     const cmd = voiceCommand.trim();
     if (!cmd) return;
+    appendHistory("user", cmd);
+    const looksLikeAlarm =
+      /(提醒|鬧鐘|闹钟|叫我|通知我)/.test(cmd) &&
+      /(明天|後天|今天|早上|上午|下午|晚上|凌晨|\d|[零一二两兩三四五六七八九十]+點|[零一二两兩三四五六七八九十]+:)/.test(cmd);
+    if (looksLikeAlarm) {
+      setAlarmCommand(cmd);
+      return scheduleAlarm();
+    }
     if (cmd.includes("確認")) return handleConfirmOrder();
     if (cmd.includes("取消")) return handleCancelOrder();
     if (cmd.includes("提醒") || cmd.includes("鬧鐘")) return scheduleAlarm();
@@ -350,12 +867,12 @@ export default function App() {
     if (cmd.includes("日曆")) return loadTodayEventAsReminder();
     if (cmd.includes("加入")) {
       setCommunityChoice("已加入他們");
-      setInfo("已幫您加入活動");
+      setInfo(t.communityJoined);
       return;
     }
     if (cmd.includes("下次")) {
       setCommunityChoice("稍後再說");
-      setInfo("好的，下次再提醒您");
+      setInfo(t.communityLater);
       return;
     }
     if (cmd.includes("下一張")) {
@@ -374,10 +891,84 @@ export default function App() {
       setZoomed(false);
       return;
     }
-    feedback(`未識別指令：「${cmd}」`);
+    feedback(`${t.unknownCommand}: ${cmd}`, t.tipTitle);
   };
 
   const activePhoto = photos[albumIndex];
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.loginPage}>
+        <StatusBar style="light" />
+        <View style={styles.loginCard}>
+          <Text style={styles.loginTitle}>{t.loginTitle}</Text>
+          <Text style={styles.loginHint}>Choose country code, enter phone, and sign in with SMS verification.</Text>
+          <View style={styles.phoneRow}>
+            <Pressable style={styles.countrySelector} onPress={() => setShowCountryMenu((v) => !v)}>
+              <Text style={styles.countrySelectorText}>{countryCode} ▾</Text>
+            </Pressable>
+            <TextInput
+              value={phoneInput}
+              onChangeText={setPhoneInput}
+              placeholder="Phone number"
+              placeholderTextColor="#8fa1bf"
+              style={[styles.loginInput, styles.phoneInput]}
+              keyboardType="phone-pad"
+            />
+          </View>
+          {showCountryMenu && (
+            <View style={styles.countryMenu}>
+              {["+86", "+81", "+1", "+44", "+65"].map((code) => (
+                <Pressable
+                  key={code}
+                  style={styles.countryOption}
+                  onPress={() => {
+                    setCountryCode(code);
+                    setShowCountryMenu(false);
+                  }}
+                >
+                  <Text style={styles.countryOptionText}>{code}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Pressable style={[styles.loginBtn, busy && styles.btnDisabled]} onPress={sendSmsCode} disabled={busy}>
+            <Text style={styles.loginBtnText}>{codeSent ? "Resend Code" : "Send Code"}</Text>
+          </Pressable>
+          <TextInput
+            value={smsCodeInput}
+            onChangeText={setSmsCodeInput}
+            placeholder="SMS verification code"
+            placeholderTextColor="#8fa1bf"
+            style={styles.loginInput}
+            keyboardType="number-pad"
+          />
+          {!!debugCodeHint && <Text style={styles.loginDevHint}>{debugCodeHint}</Text>}
+          <Pressable style={[styles.loginBtn, busy && styles.btnDisabled]} onPress={handleLogin} disabled={busy}>
+            <Text style={styles.loginBtnText}>Verify & Sign In</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+  const avatarFloatY = avatarFloat.interpolate({
+    inputRange: [0, 1],
+    outputRange: [5, -7],
+  });
+  const avatarParallaxY = companionScrollY.interpolate({
+    inputRange: [0, 260],
+    outputRange: [0, -42],
+    extrapolate: "clamp",
+  });
+  const avatarTranslateY = Animated.add(avatarParallaxY, avatarFloatY);
+  const rippleScale = speakingRipple.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1.08],
+  });
+  const rippleOpacity = speakingRipple.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.35, 0.02],
+  });
 
   return (
     <View style={styles.page}>
@@ -395,7 +986,9 @@ export default function App() {
               style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>{tab}</Text>
+              <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
+                {tabLabel(tab)}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -403,27 +996,44 @@ export default function App() {
 
       {activeTab === "陪伴" && (
         <View style={styles.sceneContainer}>
-          <ScrollView contentContainerStyle={styles.companionWrap}>
-            <View style={styles.avatarShell}>
+          <Animated.ScrollView
+            contentContainerStyle={styles.companionWrap}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: companionScrollY } } }], {
+              useNativeDriver: true,
+            })}
+            scrollEventThrottle={16}
+          >
+            <Animated.View style={[styles.avatarShell, { transform: [{ translateY: avatarTranslateY }] }]}>
               <Image
                 source={{ uri: avatarUri || "https://images.unsplash.com/photo-1544717305-2782549b5136?w=800" }}
                 style={styles.avatar}
               />
-            </View>
+            </Animated.View>
             <Text style={styles.avatarName}>小美</Text>
-            <Text style={styles.wakeHint}>說「小美」來喚醒我</Text>
+            <Text style={styles.wakeHint}>{t.wakeupHint}</Text>
 
             <View style={styles.chatPanel}>
-              <View style={styles.leftBubble}>
-                <Text style={styles.leftBubbleText}>爸，今天降溫了，記得多穿件衣服。</Text>
+              {chatHistory.length === 0 ? (
+                <View style={styles.leftBubble}>
+                  <Text style={styles.leftBubbleText}>{t.noHistory}</Text>
+                </View>
+              ) : (
+                chatHistory.map((item) => (
+                  <View key={item.id} style={item.role === "user" ? styles.rightBubble : styles.leftBubble}>
+                    <Text style={item.role === "user" ? styles.rightBubbleText : styles.leftBubbleText}>{item.text}</Text>
+                  </View>
+                ))
+              )}
+              <View style={styles.speakingHintWrap}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.speakingRipple,
+                    { transform: [{ scale: rippleScale }], opacity: rippleOpacity },
+                  ]}
+                />
+                <Text style={styles.centerHint}>•••• 隨時可以開始說話 ••••</Text>
               </View>
-              <View style={styles.rightBubble}>
-                <Text style={styles.rightBubbleText}>好的，我知道了。</Text>
-              </View>
-              <View style={styles.leftBubble}>
-                <Text style={styles.leftBubbleText}>下午三點要吃降壓藥，我會提醒您的。</Text>
-              </View>
-              <Text style={styles.centerHint}>•••• 隨時可以開始說話 ••••</Text>
               <Text style={styles.centerHintSmall}>{info}</Text>
               <Text style={styles.actionLog}>{actionLog}</Text>
               <View style={styles.commandBar}>
@@ -439,19 +1049,19 @@ export default function App() {
                 </Pressable>
               </View>
             </View>
-          </ScrollView>
+          </Animated.ScrollView>
           <View style={styles.bottomTools}>
             <View style={styles.row}>
               <Pressable style={styles.darkBtn} onPress={pickAvatarSource}>
-                <Text style={styles.darkBtnText}>上傳照片</Text>
+                <Text style={styles.darkBtnText}>{t.uploadPhoto}</Text>
               </Pressable>
               <Pressable style={[styles.greenBtn, busy && styles.btnDisabled]} onPress={generateAvatar} disabled={busy}>
-                <Text style={styles.greenBtnText}>生成形象</Text>
+                <Text style={styles.greenBtnText}>{t.genAvatar}</Text>
               </Pressable>
             </View>
             <View style={styles.row}>
               <Pressable style={[styles.darkBtn, busy && styles.btnDisabled]} onPress={registerVoice} disabled={busy}>
-                <Text style={styles.darkBtnText}>註冊聲紋</Text>
+                <Text style={styles.darkBtnText}>{t.voiceRegister}</Text>
               </Pressable>
               {listening ? (
                 <Pressable
@@ -461,15 +1071,15 @@ export default function App() {
                     setListening(false);
                   }}
                 >
-                  <Text style={styles.redBtnText}>停止監聽</Text>
+                  <Text style={styles.redBtnText}>{t.voiceStop}</Text>
                 </Pressable>
               ) : (
                 <Pressable
-                  style={[styles.greenBtn, (voiceState !== "已註冊" || busy) && styles.btnDisabled]}
+                  style={[styles.greenBtn, (voiceState !== t.voiceRegistered || busy) && styles.btnDisabled]}
                   onPress={startVoiceMonitoring}
-                  disabled={voiceState !== "已註冊" || busy}
+                  disabled={voiceState !== t.voiceRegistered || busy}
                 >
-                  <Text style={styles.greenBtnText}>開啟監聽</Text>
+                  <Text style={styles.greenBtnText}>{t.voiceStart}</Text>
                 </Pressable>
               )}
             </View>
@@ -519,14 +1129,14 @@ export default function App() {
               placeholderTextColor="#8b5c00"
             />
             <Pressable style={[styles.reminderSetBtn, busy && styles.btnDisabled]} onPress={scheduleAlarm} disabled={busy}>
-              <Text style={styles.reminderSetText}>設定提醒</Text>
+              <Text style={styles.reminderSetText}>{t.alarmSet}</Text>
             </Pressable>
           </View>
           <Pressable
             style={[styles.ackBtn, reminderAcked && styles.ackBtnDone]}
             onPress={() => {
               setReminderAcked(true);
-              setInfo("已確認提醒");
+              setInfo(t.reminderAcked);
             }}
           >
             <Text style={styles.ackText}>{reminderAcked ? "✓ 我知道了" : "✓ 我知道了"}</Text>
@@ -537,6 +1147,19 @@ export default function App() {
 
       {activeTab === "相冊" && (
         <View style={styles.albumScene}>
+          <Pressable
+            style={[styles.darkBtn, { marginBottom: 10 }]}
+            onPress={() => setRandomizeOnAlbumEnter((v) => !v)}
+          >
+            <Text style={styles.darkBtnText}>
+              進入相冊自動隨機換圖：{randomizeOnAlbumEnter ? "開" : "關"}
+            </Text>
+          </Pressable>
+          {!photos.length && (
+            <Pressable style={[styles.darkBtn, { marginBottom: 12 }]} onPress={() => void readLatestPhotos()}>
+              <Text style={styles.darkBtnText}>隨機載入一張照片</Text>
+            </Pressable>
+          )}
           <View style={styles.albumFrame}>
             {activePhoto ? (
               <Image source={{ uri: activePhoto.uri }} style={[styles.albumImage, zoomed && styles.albumImageZoom]} />
@@ -567,7 +1190,7 @@ export default function App() {
             </Pressable>
           </View>
           <View style={styles.row}>
-            <Pressable style={styles.darkBtn} onPress={readLatestPhotos}>
+            <Pressable style={styles.darkBtn} onPress={() => void readLatestPhotos()}>
               <Text style={styles.darkBtnText}>讀取相冊</Text>
             </Pressable>
             <Pressable style={styles.darkBtn} onPress={loadTodayEventAsReminder}>
@@ -643,22 +1266,63 @@ export default function App() {
           </View>
 
           <Pressable style={styles.nextBtn} onPress={saveProfile}>
-            <Text style={styles.nextBtnText}>下一步</Text>
+            <Text style={styles.nextBtnText}>{t.profileNext}</Text>
           </Pressable>
         </ScrollView>
       )}
 
-      <Text style={styles.bottomStatus}>頻道：{channel} · 聲紋：{voiceState}</Text>
+      <Text style={styles.bottomStatus}>頻道：{channel} · 聲紋：{voiceState} · API：{resolvedApiBase}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#eae7dd" },
+  loginPage: { flex: 1, backgroundColor: "#0f1b35", justifyContent: "center", padding: 20 },
+  loginCard: { backgroundColor: "#1c2b4a", borderRadius: 18, padding: 18 },
+  loginTitle: { color: "#f8fafc", fontSize: 26, fontWeight: "700", marginBottom: 8 },
+  loginHint: { color: "#9fb0cf", fontSize: 14, marginBottom: 14 },
+  phoneRow: { flexDirection: "row", gap: 8, alignItems: "stretch", marginBottom: 10 },
+  countrySelector: {
+    height: 44,
+    width: 108,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#33496f",
+    backgroundColor: "#13233f",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    marginBottom: 0,
+  },
+  countrySelectorText: { color: "#f8fafc", fontSize: 14, fontWeight: "600" },
+  countryMenu: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#33496f",
+    backgroundColor: "#13233f",
+    marginBottom: 10,
+    overflow: "hidden",
+  },
+  countryOption: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#213556" },
+  countryOptionText: { color: "#d8e6ff", fontSize: 14 },
+  loginInput: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#33496f",
+    backgroundColor: "#13233f",
+    color: "#f8fafc",
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  phoneInput: { flex: 1, marginBottom: 0 },
+  loginBtn: { backgroundColor: "#19b889", borderRadius: 12, alignItems: "center", paddingVertical: 12 },
+  loginBtnText: { color: "#ecfffa", fontSize: 16, fontWeight: "700" },
+  loginDevHint: { color: "#facc15", fontSize: 12, marginBottom: 10 },
+  page: { flex: 1, backgroundColor: "#ece9df" },
   devBar: {
     marginTop: 10,
     marginHorizontal: 8,
-    backgroundColor: "#1a2540",
+    backgroundColor: "#1b2745",
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -669,7 +1333,7 @@ const styles = StyleSheet.create({
   closeIcon: { color: "#8d97ab", fontWeight: "700", fontSize: 18 },
   tabRow: { flexDirection: "row", gap: 8 },
   tabPill: {
-    backgroundColor: "#2d3a57",
+    backgroundColor: "#2a3858",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
@@ -686,16 +1350,21 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 4,
-    borderColor: "#e8eef8",
+    borderColor: "#e4edf9",
     alignSelf: "center",
     marginTop: 12,
+    shadowColor: "#2f5ea4",
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
   },
   avatar: { width: "100%", height: "100%" },
   avatarName: { textAlign: "center", marginTop: 10, color: "#1d3563", fontSize: 24, fontWeight: "700" },
   wakeHint: { textAlign: "center", marginTop: 6, color: "#6380ad", fontSize: 18 },
   chatPanel: {
     marginTop: 20,
-    backgroundColor: "#000b2e",
+    backgroundColor: "#08142d",
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     minHeight: 500,
@@ -703,7 +1372,7 @@ const styles = StyleSheet.create({
     paddingTop: 26,
   },
   leftBubble: {
-    backgroundColor: "#283753",
+    backgroundColor: "#2b3d5f",
     borderRadius: 22,
     padding: 18,
     marginBottom: 16,
@@ -712,7 +1381,7 @@ const styles = StyleSheet.create({
   },
   leftBubbleText: { color: "#f1f5f9", fontSize: 20, lineHeight: 28, fontWeight: "600" },
   rightBubble: {
-    backgroundColor: "#12b980",
+    backgroundColor: "#14b989",
     borderRadius: 22,
     padding: 18,
     marginBottom: 16,
@@ -720,6 +1389,23 @@ const styles = StyleSheet.create({
     maxWidth: "80%",
   },
   rightBubbleText: { color: "#f2fff9", fontSize: 20, lineHeight: 28, fontWeight: "700" },
+  speakingHintWrap: {
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 2,
+    minWidth: 240,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  speakingRipple: {
+    position: "absolute",
+    width: "100%",
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    borderColor: "#6f8bb8",
+    backgroundColor: "rgba(94, 122, 168, 0.12)",
+  },
   centerHint: { color: "#7e90b4", textAlign: "center", marginTop: 10, fontSize: 15, fontWeight: "700" },
   centerHintSmall: { color: "#7e90b4", textAlign: "center", marginTop: 8, marginBottom: 14, fontSize: 13 },
   actionLog: { color: "#c6d4f4", textAlign: "center", marginBottom: 8, fontSize: 12 },
@@ -742,14 +1428,14 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     bottom: 12,
-    backgroundColor: "#0b1d3a",
+    backgroundColor: "#0f1f3e",
     padding: 12,
     borderRadius: 16,
   },
   row: { flexDirection: "row", gap: 12, marginBottom: 10 },
-  darkBtn: { flex: 1, backgroundColor: "#34415c", borderRadius: 16, alignItems: "center", paddingVertical: 13 },
+  darkBtn: { flex: 1, backgroundColor: "#3a4865", borderRadius: 16, alignItems: "center", paddingVertical: 13 },
   darkBtnText: { color: "#eef2ff", fontSize: 15, fontWeight: "700" },
-  greenBtn: { flex: 1, backgroundColor: "#10b981", borderRadius: 16, alignItems: "center", paddingVertical: 13 },
+  greenBtn: { flex: 1, backgroundColor: "#18b888", borderRadius: 16, alignItems: "center", paddingVertical: 13 },
   greenBtnText: { color: "#edfff8", fontSize: 15, fontWeight: "700" },
   redBtn: { flex: 1, backgroundColor: "#ff2c3c", borderRadius: 16, alignItems: "center", paddingVertical: 13 },
   redBtnText: { color: "#fff3f3", fontSize: 15, fontWeight: "700" },

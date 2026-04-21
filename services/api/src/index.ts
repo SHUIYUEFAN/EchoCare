@@ -5,6 +5,10 @@ import sharp from "sharp";
 const app = express();
 app.use(express.json({ limit: "15mb" }));
 
+type OtpRecord = { code: string; expiresAt: number; attempts: number };
+const otpStore = new Map<string, OtpRecord>();
+const OTP_TTL_MS = 5 * 60 * 1000;
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "echocare-api" });
 });
@@ -109,6 +113,55 @@ app.post("/v1/avatar/generate", async (req, res) => {
   } catch {
     res.status(500).json({ error: "avatar generation failed" });
   }
+});
+
+app.post("/v1/auth/send-code", (req, res) => {
+  const { phone } = req.body as { phone?: string };
+  if (!phone || !/^\+\d{6,15}$/.test(phone)) {
+    res.status(400).json({ error: "valid phone required" });
+    return;
+  }
+  const code = String(Math.floor(Math.random() * 900000) + 100000);
+  const now = Date.now();
+  otpStore.set(phone, { code, expiresAt: now + OTP_TTL_MS, attempts: 0 });
+  res.json({
+    success: true,
+    expiresInSec: OTP_TTL_MS / 1000,
+    // Demo-only fallback for local/dev. Remove once a real SMS provider is integrated.
+    debugCode: process.env.NODE_ENV === "production" ? undefined : code,
+  });
+});
+
+app.post("/v1/auth/verify-code", (req, res) => {
+  const { phone, code } = req.body as { phone?: string; code?: string };
+  if (!phone || !code) {
+    res.status(400).json({ error: "phone and code required" });
+    return;
+  }
+  const record = otpStore.get(phone);
+  if (!record) {
+    res.status(404).json({ error: "code not sent or expired" });
+    return;
+  }
+  const now = Date.now();
+  if (record.expiresAt < now) {
+    otpStore.delete(phone);
+    res.status(410).json({ error: "code expired" });
+    return;
+  }
+  if (record.attempts >= 5) {
+    otpStore.delete(phone);
+    res.status(429).json({ error: "too many attempts" });
+    return;
+  }
+  if (record.code !== code) {
+    record.attempts += 1;
+    otpStore.set(phone, record);
+    res.status(401).json({ error: "invalid code" });
+    return;
+  }
+  otpStore.delete(phone);
+  res.json({ success: true, token: `demo-token-${Buffer.from(phone).toString("base64")}` });
 });
 
 const port = Number(process.env.PORT) || 3001;
