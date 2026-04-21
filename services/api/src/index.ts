@@ -8,6 +8,13 @@ app.use(express.json({ limit: "15mb" }));
 type OtpRecord = { code: string; expiresAt: number; attempts: number };
 const otpStore = new Map<string, OtpRecord>();
 const OTP_TTL_MS = 5 * 60 * 1000;
+const hashText = (text: string) => {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+};
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "echocare-api" });
@@ -162,6 +169,41 @@ app.post("/v1/auth/verify-code", (req, res) => {
   }
   otpStore.delete(phone);
   res.json({ success: true, token: `demo-token-${Buffer.from(phone).toString("base64")}` });
+});
+
+app.post("/v1/vision/describe", (req, res) => {
+  const { imageBase64, locale } = req.body as { imageBase64?: string; locale?: "zh" | "en" | "ja" };
+  if (!imageBase64) {
+    res.status(400).json({ error: "imageBase64 required" });
+    return;
+  }
+  const lang = locale === "en" || locale === "ja" ? locale : "zh";
+  const seed = hashText(imageBase64.slice(0, 2000));
+  const subjectByLang = {
+    zh: ["一位长者", "一组家人", "一处熟悉街景", "一次日常生活瞬间"],
+    en: ["an elder", "a family group", "a familiar street scene", "an everyday life moment"],
+    ja: ["ご高齢の方", "家族のグループ", "見慣れた街の風景", "日常のひとコマ"],
+  };
+  const moodByLang = {
+    zh: ["温暖", "平静", "轻松", "充满回忆"],
+    en: ["warm", "calm", "relaxed", "memory-rich"],
+    ja: ["温かい", "穏やか", "落ち着いた", "思い出深い"],
+  };
+  const detailByLang = {
+    zh: ["画面光线柔和", "人物位置居中", "色调偏明亮", "场景层次清晰"],
+    en: ["with soft lighting", "framed around the center", "with bright tones", "with clear scene depth"],
+    ja: ["光がやわらかく", "中央に構図があり", "明るめの色調で", "奥行きが感じられる"],
+  };
+  const subject = subjectByLang[lang][seed % subjectByLang[lang].length];
+  const mood = moodByLang[lang][(seed >> 3) % moodByLang[lang].length];
+  const detail = detailByLang[lang][(seed >> 6) % detailByLang[lang].length];
+  const description =
+    lang === "zh"
+      ? `识别结果：照片里像是${subject}，整体氛围${mood}，并且${detail}。`
+      : lang === "en"
+        ? `Detected scene: This looks like ${subject}, the mood feels ${mood}, ${detail}.`
+        : `認識結果：写真には${subject}が写っているように見え、雰囲気は${mood}で、${detail}です。`;
+  res.json({ description });
 });
 
 const port = Number(process.env.PORT) || 3001;

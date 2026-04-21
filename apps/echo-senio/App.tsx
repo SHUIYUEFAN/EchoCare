@@ -46,6 +46,11 @@ const I18N = {
     voiceStart: "开启监听",
     voiceStop: "停止监听",
     alarmSet: "设定提醒",
+    reminderTitle: "用药提醒",
+    reminderDefaultTime: "下午 3:00",
+    reminderInputPlaceholder: "明天下午3点提醒我吃降压药",
+    reminderAckButton: "✓ 我知道了",
+    alarmUnset: "尚未設定",
     profileNext: "下一步",
     tipTitle: "提示",
     errorTitle: "错误",
@@ -83,6 +88,13 @@ const I18N = {
     webNoAlbum: "Web 不支持相册 API",
     albumReadFailed: "读取相册失败",
     albumLoaded: "已载入照片",
+    albumCaptionLoading: "正在识别照片内容...",
+    albumCaptionFallback: "这是一张珍贵的生活照片，记录了温暖时刻。",
+    albumCaptionError: "图片识别失败，已使用默认描述。",
+    albumPrev: "‹ 上一张",
+    albumNext: "下一张 ›",
+    albumZoomIn: "放大",
+    albumZoomOut: "缩小",
     webNoCalendar: "Web 不支持日历 API",
     calendarPermissionDenied: "未授予日历权限",
     noEventToday: "今天没有日程",
@@ -102,6 +114,18 @@ const I18N = {
     voiceUnregistered: "未注册",
     apiSwitched: "API 已切换到",
     noHistory: "暂无历史对话，开始说话后会记录在这里",
+    profileTitle: "基本资料",
+    profileGenderLabel: "性别",
+    profileAgeLabel: "年龄",
+    profileConditionLabel: "是否有基础病？",
+    genderMale: "男",
+    genderFemale: "女",
+    conditionYes: "有",
+    conditionNo: "没有",
+    ageRange60_70: "60-70岁",
+    ageRange70_80: "70-80岁",
+    ageRange80_90: "80-90岁",
+    ageRange90Plus: "90+岁",
   },
   en: {
     loginTitle: "EchoCare Sign In",
@@ -125,6 +149,11 @@ const I18N = {
     voiceStart: "Start Listening",
     voiceStop: "Stop Listening",
     alarmSet: "Set Reminder",
+    reminderTitle: "Medication Reminder",
+    reminderDefaultTime: "3:00 PM",
+    reminderInputPlaceholder: "Remind me tomorrow at 3 PM to take medicine",
+    reminderAckButton: "✓ Got it",
+    alarmUnset: "Not set yet",
     profileNext: "Next",
     tipTitle: "Tip",
     errorTitle: "Error",
@@ -162,6 +191,13 @@ const I18N = {
     webNoAlbum: "Album API is not supported on Web",
     albumReadFailed: "Failed to read album",
     albumLoaded: "Photos loaded",
+    albumCaptionLoading: "Analyzing photo content...",
+    albumCaptionFallback: "This is a precious life photo capturing a warm moment.",
+    albumCaptionError: "Image recognition failed. Using fallback description.",
+    albumPrev: "‹ Previous",
+    albumNext: "Next ›",
+    albumZoomIn: "Zoom In",
+    albumZoomOut: "Zoom Out",
     webNoCalendar: "Calendar API is not supported on Web",
     calendarPermissionDenied: "Calendar permission denied",
     noEventToday: "No events today",
@@ -181,6 +217,18 @@ const I18N = {
     voiceUnregistered: "Not registered",
     apiSwitched: "API switched to",
     noHistory: "No conversation history yet. Start speaking to create records.",
+    profileTitle: "Basic Profile",
+    profileGenderLabel: "Gender",
+    profileAgeLabel: "Age",
+    profileConditionLabel: "Underlying condition?",
+    genderMale: "Male",
+    genderFemale: "Female",
+    conditionYes: "Yes",
+    conditionNo: "No",
+    ageRange60_70: "60-70",
+    ageRange70_80: "70-80",
+    ageRange80_90: "80-90",
+    ageRange90Plus: "90+",
   },
   ja: {
     loginTitle: "EchoCare ログイン",
@@ -204,6 +252,11 @@ const I18N = {
     voiceStart: "監聴開始",
     voiceStop: "監聴停止",
     alarmSet: "通知を設定",
+    reminderTitle: "服薬リマインド",
+    reminderDefaultTime: "午後 3:00",
+    reminderInputPlaceholder: "明日の午後3時に薬を飲むように知らせて",
+    reminderAckButton: "✓ わかりました",
+    alarmUnset: "未設定",
     profileNext: "次へ",
     tipTitle: "ヒント",
     errorTitle: "エラー",
@@ -241,6 +294,13 @@ const I18N = {
     webNoAlbum: "Web ではアルバム API を利用できません",
     albumReadFailed: "アルバム読み込み失敗",
     albumLoaded: "写真を読み込みました",
+    albumCaptionLoading: "写真内容を認識中...",
+    albumCaptionFallback: "あたたかい瞬間を記録した大切な日常写真です。",
+    albumCaptionError: "画像認識に失敗したため、既定の説明を表示します。",
+    albumPrev: "‹ 前へ",
+    albumNext: "次へ ›",
+    albumZoomIn: "拡大",
+    albumZoomOut: "縮小",
     webNoCalendar: "Web ではカレンダー API を利用できません",
     calendarPermissionDenied: "カレンダー権限がありません",
     noEventToday: "本日の予定はありません",
@@ -260,6 +320,18 @@ const I18N = {
     voiceUnregistered: "未登録",
     apiSwitched: "API を切り替え:",
     noHistory: "会話履歴はまだありません。話し始めるとここに記録されます。",
+    profileTitle: "基本情報",
+    profileGenderLabel: "性別",
+    profileAgeLabel: "年齢",
+    profileConditionLabel: "基礎疾患はありますか？",
+    genderMale: "男性",
+    genderFemale: "女性",
+    conditionYes: "ある",
+    conditionNo: "ない",
+    ageRange60_70: "60-70歳",
+    ageRange70_80: "70-80歳",
+    ageRange80_90: "80-90歳",
+    ageRange90Plus: "90歳以上",
   },
 } as const;
 
@@ -302,7 +374,7 @@ export default function App() {
   const [avatarUri, setAvatarUri] = useState("");
 
   const [alarmCommand, setAlarmCommand] = useState("明天下午3點提醒我吃降壓藥");
-  const [alarmStatus, setAlarmStatus] = useState("尚未設定");
+  const [alarmStatus, setAlarmStatus] = useState<string>(t.alarmUnset);
   const [reminderText, setReminderText] = useState("下午3:00 吃降壓藥！");
   const [reminderAcked, setReminderAcked] = useState(false);
 
@@ -310,12 +382,13 @@ export default function App() {
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
-  const [randomizeOnAlbumEnter, setRandomizeOnAlbumEnter] = useState(true);
+  const [albumCaption, setAlbumCaption] = useState("");
+  const [albumCaptionLoading, setAlbumCaptionLoading] = useState(false);
   const [communityChoice, setCommunityChoice] = useState("尚未決定");
 
-  const [profileGender, setProfileGender] = useState<"男" | "女" | "">("");
-  const [profileAge, setProfileAge] = useState("");
-  const [hasCondition, setHasCondition] = useState<"有" | "沒有" | "">("");
+  const [profileGender, setProfileGender] = useState<"male" | "female" | "">("");
+  const [profileAge, setProfileAge] = useState<"60-70" | "70-80" | "80-90" | "90+" | "">("");
+  const [hasCondition, setHasCondition] = useState<"yes" | "no" | "">("");
   const [voiceCommand, setVoiceCommand] = useState("");
   const [showConfirmCard, setShowConfirmCard] = useState(true);
   const [actionLog, setActionLog] = useState<string>(t.waitingAction);
@@ -387,11 +460,15 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (activeTab === "相冊" && photos.length && randomizeOnAlbumEnter) {
+    setAlarmStatus((prev) => (prev === I18N.zh.alarmUnset || prev === I18N.en.alarmUnset || prev === I18N.ja.alarmUnset ? t.alarmUnset : prev));
+  }, [locale, t.alarmUnset]);
+
+  useEffect(() => {
+    if (activeTab === "相冊" && photos.length) {
       const randomIdx = Math.floor(Math.random() * photos.length);
       setAlbumIndex(randomIdx);
     }
-  }, [activeTab, photos, randomizeOnAlbumEnter]);
+  }, [activeTab, photos]);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -781,6 +858,31 @@ export default function App() {
     }
   };
 
+  const describePhoto = async (photo?: PhotoPreview) => {
+    if (!photo) {
+      setAlbumCaption(t.albumCaptionFallback);
+      return;
+    }
+    setAlbumCaptionLoading(true);
+    try {
+      const imageBase64 = await FileSystem.readAsStringAsync(photo.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const response = await requestApi("/v1/vision/describe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imageBase64, locale }),
+      });
+      const payload = (await response.json()) as { description?: string };
+      if (!response.ok || !payload.description) throw new Error(t.albumCaptionError);
+      setAlbumCaption(payload.description);
+    } catch {
+      setAlbumCaption(t.albumCaptionFallback);
+    } finally {
+      setAlbumCaptionLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isLoggedIn || unsupportedOnWeb || photos.length > 0 || autoAlbumLoadingRef.current) return;
     autoAlbumLoadingRef.current = true;
@@ -796,6 +898,16 @@ export default function App() {
       autoAlbumLoadingRef.current = false;
     });
   }, [activeTab, photos.length, unsupportedOnWeb]);
+
+  const activePhoto = photos[albumIndex];
+
+  useEffect(() => {
+    if (!activePhoto) {
+      setAlbumCaption(t.albumCaptionFallback);
+      return;
+    }
+    void describePhoto(activePhoto);
+  }, [activePhoto?.id, locale]);
 
   const loadTodayEventAsReminder = async () => {
     if (unsupportedOnWeb) {
@@ -845,7 +957,17 @@ export default function App() {
       feedback(t.completeProfileFirst, t.tipTitle);
       return;
     }
-    feedback(`${t.profileSaved}: ${profileGender} / ${profileAge} / ${hasCondition}`, t.tipTitle);
+    const genderLabel = profileGender === "male" ? t.genderMale : t.genderFemale;
+    const conditionLabel = hasCondition === "yes" ? t.conditionYes : t.conditionNo;
+    const ageLabel =
+      profileAge === "60-70"
+        ? t.ageRange60_70
+        : profileAge === "70-80"
+          ? t.ageRange70_80
+          : profileAge === "80-90"
+            ? t.ageRange80_90
+            : t.ageRange90Plus;
+    feedback(`${t.profileSaved}: ${genderLabel} / ${ageLabel} / ${conditionLabel}`, t.tipTitle);
     setActiveTab("陪伴");
   };
 
@@ -893,8 +1015,6 @@ export default function App() {
     }
     feedback(`${t.unknownCommand}: ${cmd}`, t.tipTitle);
   };
-
-  const activePhoto = photos[albumIndex];
 
   if (!isLoggedIn) {
     return (
@@ -986,7 +1106,7 @@ export default function App() {
               style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
+              <Text numberOfLines={1} style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
                 {tabLabel(tab)}
               </Text>
             </Pressable>
@@ -1117,15 +1237,15 @@ export default function App() {
 
       {activeTab === "提醒" && (
         <View style={styles.reminderScene}>
-          <Text style={styles.reminderTop}>用藥提醒</Text>
-          <Text style={styles.reminderBig}>下午 3:00</Text>
+          <Text style={styles.reminderTop}>{t.reminderTitle}</Text>
+          <Text style={styles.reminderBig}>{t.reminderDefaultTime}</Text>
           <Text style={styles.reminderBig}>{reminderText}</Text>
           <View style={styles.reminderInputPanel}>
             <TextInput
               value={alarmCommand}
               onChangeText={setAlarmCommand}
               style={styles.reminderInput}
-              placeholder="明天下午3點提醒我吃降壓藥"
+              placeholder={t.reminderInputPlaceholder}
               placeholderTextColor="#8b5c00"
             />
             <Pressable style={[styles.reminderSetBtn, busy && styles.btnDisabled]} onPress={scheduleAlarm} disabled={busy}>
@@ -1139,7 +1259,7 @@ export default function App() {
               setInfo(t.reminderAcked);
             }}
           >
-            <Text style={styles.ackText}>{reminderAcked ? "✓ 我知道了" : "✓ 我知道了"}</Text>
+            <Text style={styles.ackText}>{t.reminderAckButton}</Text>
           </Pressable>
           <Text style={styles.reminderStatus}>{alarmStatus}</Text>
         </View>
@@ -1147,14 +1267,6 @@ export default function App() {
 
       {activeTab === "相冊" && (
         <View style={styles.albumScene}>
-          <Pressable
-            style={[styles.darkBtn, { marginBottom: 10 }]}
-            onPress={() => setRandomizeOnAlbumEnter((v) => !v)}
-          >
-            <Text style={styles.darkBtnText}>
-              進入相冊自動隨機換圖：{randomizeOnAlbumEnter ? "開" : "關"}
-            </Text>
-          </Pressable>
           {!photos.length && (
             <Pressable style={[styles.darkBtn, { marginBottom: 12 }]} onPress={() => void readLatestPhotos()}>
               <Text style={styles.darkBtnText}>隨機載入一張照片</Text>
@@ -1167,34 +1279,24 @@ export default function App() {
               <Text style={styles.albumEmpty}>請先讀取相冊</Text>
             )}
           </View>
-          <Text style={styles.albumCaption}>
-            「這是 {activePhoto?.created || "1990 年"} 在老家的合影，那時候您剛退休...」
-          </Text>
+          <Text style={styles.albumCaption}>{albumCaptionLoading ? t.albumCaptionLoading : albumCaption}</Text>
           <View style={styles.albumActions}>
             <Pressable
               onPress={() => setAlbumIndex((idx) => Math.max(idx - 1, 0))}
               disabled={albumIndex === 0}
               style={styles.albumActionBtn}
             >
-              <Text style={styles.albumActionText}>‹ 上一張</Text>
+              <Text style={styles.albumActionText}>{t.albumPrev}</Text>
             </Pressable>
             <Pressable onPress={() => setZoomed((v) => !v)} style={styles.albumActionBtn}>
-              <Text style={styles.albumActionText}>{zoomed ? "縮小" : "放大"}</Text>
+              <Text style={styles.albumActionText}>{zoomed ? t.albumZoomOut : t.albumZoomIn}</Text>
             </Pressable>
             <Pressable
               onPress={() => setAlbumIndex((idx) => Math.min(idx + 1, Math.max(photos.length - 1, 0)))}
               disabled={albumIndex >= photos.length - 1}
               style={styles.albumActionBtn}
             >
-              <Text style={styles.albumActionText}>下一張 ›</Text>
-            </Pressable>
-          </View>
-          <View style={styles.row}>
-            <Pressable style={styles.darkBtn} onPress={() => void readLatestPhotos()}>
-              <Text style={styles.darkBtnText}>讀取相冊</Text>
-            </Pressable>
-            <Pressable style={styles.darkBtn} onPress={loadTodayEventAsReminder}>
-              <Text style={styles.darkBtnText}>讀取日曆</Text>
+              <Text style={styles.albumActionText}>{t.albumNext}</Text>
             </Pressable>
           </View>
         </View>
@@ -1219,49 +1321,64 @@ export default function App() {
 
       {activeTab === "檔案" && (
         <ScrollView style={styles.profileScene} contentContainerStyle={{ paddingBottom: 32 }}>
-          <Text style={styles.profileTitle}>基本資料</Text>
-          <Text style={styles.profileLabel}>性別</Text>
+          <Text style={styles.profileTitle}>{t.profileTitle}</Text>
+          <Text style={styles.profileLabel}>{t.profileGenderLabel}</Text>
           <View style={styles.row}>
             <Pressable
-              style={[styles.profileOption, profileGender === "男" && styles.profileOptionActive]}
-              onPress={() => setProfileGender("男")}
+              style={[styles.profileOption, profileGender === "male" && styles.profileOptionActive]}
+              onPress={() => setProfileGender("male")}
             >
-              <Text style={[styles.profileOptionText, profileGender === "男" && styles.profileOptionTextActive]}>男</Text>
+              <Text style={[styles.profileOptionText, profileGender === "male" && styles.profileOptionTextActive]}>
+                {t.genderMale}
+              </Text>
             </Pressable>
             <Pressable
-              style={[styles.profileOption, profileGender === "女" && styles.profileOptionActive]}
-              onPress={() => setProfileGender("女")}
+              style={[styles.profileOption, profileGender === "female" && styles.profileOptionActive]}
+              onPress={() => setProfileGender("female")}
             >
-              <Text style={[styles.profileOptionText, profileGender === "女" && styles.profileOptionTextActive]}>女</Text>
+              <Text style={[styles.profileOptionText, profileGender === "female" && styles.profileOptionTextActive]}>
+                {t.genderFemale}
+              </Text>
             </Pressable>
           </View>
 
-          <Text style={styles.profileLabel}>年齡</Text>
+          <Text style={styles.profileLabel}>{t.profileAgeLabel}</Text>
           <View style={styles.wrapRow}>
-            {["60-70歲", "70-80歲", "80-90歲", "90+歲"].map((age) => (
+            {[
+              { id: "60-70", label: t.ageRange60_70 },
+              { id: "70-80", label: t.ageRange70_80 },
+              { id: "80-90", label: t.ageRange80_90 },
+              { id: "90+", label: t.ageRange90Plus },
+            ].map((age) => (
               <Pressable
-                key={age}
-                style={[styles.ageChip, profileAge === age && styles.profileOptionActive]}
-                onPress={() => setProfileAge(age)}
+                key={age.id}
+                style={[styles.ageChip, profileAge === age.id && styles.profileOptionActive]}
+                onPress={() => setProfileAge(age.id as "60-70" | "70-80" | "80-90" | "90+")}
               >
-                <Text style={[styles.profileOptionText, profileAge === age && styles.profileOptionTextActive]}>{age}</Text>
+                <Text style={[styles.profileOptionText, profileAge === age.id && styles.profileOptionTextActive]}>
+                  {age.label}
+                </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={styles.profileLabel}>是否有基礎病？</Text>
+          <Text style={styles.profileLabel}>{t.profileConditionLabel}</Text>
           <View style={styles.row}>
             <Pressable
-              style={[styles.profileOption, hasCondition === "有" && styles.profileOptionActive]}
-              onPress={() => setHasCondition("有")}
+              style={[styles.profileOption, hasCondition === "yes" && styles.profileOptionActive]}
+              onPress={() => setHasCondition("yes")}
             >
-              <Text style={[styles.profileOptionText, hasCondition === "有" && styles.profileOptionTextActive]}>有</Text>
+              <Text style={[styles.profileOptionText, hasCondition === "yes" && styles.profileOptionTextActive]}>
+                {t.conditionYes}
+              </Text>
             </Pressable>
             <Pressable
-              style={[styles.profileOption, hasCondition === "沒有" && styles.profileOptionActive]}
-              onPress={() => setHasCondition("沒有")}
+              style={[styles.profileOption, hasCondition === "no" && styles.profileOptionActive]}
+              onPress={() => setHasCondition("no")}
             >
-              <Text style={[styles.profileOptionText, hasCondition === "沒有" && styles.profileOptionTextActive]}>沒有</Text>
+              <Text style={[styles.profileOptionText, hasCondition === "no" && styles.profileOptionTextActive]}>
+                {t.conditionNo}
+              </Text>
             </Pressable>
           </View>
 
@@ -1331,15 +1448,18 @@ const styles = StyleSheet.create({
   devBarHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   devMode: { color: "#8d97ab", fontWeight: "700", fontSize: 19 },
   closeIcon: { color: "#8d97ab", fontWeight: "700", fontSize: 18 },
-  tabRow: { flexDirection: "row", gap: 8 },
+  tabRow: { flexDirection: "row", gap: 6 },
   tabPill: {
+    flex: 1,
+    minWidth: 0,
     backgroundColor: "#2a3858",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 9,
     borderRadius: 14,
+    alignItems: "center",
   },
   tabPillActive: { backgroundColor: "#f4f5f7" },
-  tabPillText: { color: "#f1f5f9", fontWeight: "700", fontSize: 16 },
+  tabPillText: { color: "#f1f5f9", fontWeight: "700", fontSize: 13 },
   tabPillTextActive: { color: "#1f2937" },
 
   sceneContainer: { flex: 1 },
