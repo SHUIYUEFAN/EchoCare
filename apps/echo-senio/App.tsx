@@ -400,17 +400,18 @@ export default function App() {
   const autoAlbumLoadingRef = useRef(false);
 
   const unsupportedOnWeb = Platform.OS === "web";
+  const productionApiBase = "https://echocare-tc2e.onrender.com";
   const configuredApiBase =
     process.env.EXPO_PUBLIC_API_BASE_URL ||
-    (Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001");
+    (Platform.OS === "android" ? productionApiBase : productionApiBase);
   const [resolvedApiBase, setResolvedApiBase] = useState(configuredApiBase);
   const apiCandidates = useMemo(() => {
     const defaults =
       Platform.OS === "android"
-        ? ["http://10.0.2.2:3001", "http://10.0.3.2:3001", "http://127.0.0.1:3001", "http://localhost:3001"]
-        : ["http://localhost:3001", "http://127.0.0.1:3001"];
+        ? [productionApiBase, "http://10.0.2.2:3001", "http://10.0.3.2:3001", "http://127.0.0.1:3001", "http://localhost:3001"]
+        : [productionApiBase, "http://localhost:3001", "http://127.0.0.1:3001"];
     return Array.from(new Set([configuredApiBase, ...defaults]));
-  }, [configuredApiBase]);
+  }, [configuredApiBase, productionApiBase]);
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -1388,7 +1389,7 @@ export default function App() {
         </ScrollView>
       )}
 
-      <Text style={styles.bottomStatus}>頻道：{channel} · 聲紋：{voiceState} · API：{resolvedApiBase}</Text>
+      {false ? <Text style={styles.bottomStatus}>頻道：{channel} · 聲紋：{voiceState} · API：{resolvedApiBase}</Text> : null}
     </View>
   );
 }

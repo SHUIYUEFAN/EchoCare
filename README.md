@@ -30,7 +30,7 @@ npx pnpm@9 install
 npx pnpm@9 dev          # Turbo：并行 dev（各包自行定义）
 npx pnpm@9 senio        # 仅老人端 Expo
 npx pnpm@9 family       # 仅子女端 Expo
-npx pnpm@9 api          # 仅 API（默认 http://localhost:3001）
+npx pnpm@9 api          # 仅 API（生产: https://echocare-tc2e.onrender.com）
 npx pnpm@9 build        # 类型检查 / 构建 workspace 包
 ```
 
