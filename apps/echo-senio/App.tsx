@@ -76,6 +76,7 @@ const I18N = {
     voiceRegisterFailed: "声纹注册失败",
     voiceRegistered: "已注册",
     voiceRegisterSuccess: "声纹注册成功",
+    voiceRegisterOfflineSuccess: "网络异常，已切换为本地声纹模式",
     voiceRegisterFailedTitle: "注册失败",
     registerFirstBeforeListen: "请先注册声纹再开启监听",
     listeningStarted: "监听已开启",
@@ -179,6 +180,7 @@ const I18N = {
     voiceRegisterFailed: "Voice registration failed",
     voiceRegistered: "Registered",
     voiceRegisterSuccess: "Voice registered successfully",
+    voiceRegisterOfflineSuccess: "Network unavailable. Switched to local voice mode.",
     voiceRegisterFailedTitle: "Registration Failed",
     registerFirstBeforeListen: "Please register voice before listening",
     listeningStarted: "Listening started",
@@ -282,6 +284,7 @@ const I18N = {
     voiceRegisterFailed: "音声登録に失敗しました",
     voiceRegistered: "登録済み",
     voiceRegisterSuccess: "音声登録に成功しました",
+    voiceRegisterOfflineSuccess: "ネットワーク不安定のため、ローカル音声モードに切り替えました",
     voiceRegisterFailedTitle: "登録失敗",
     registerFirstBeforeListen: "先に音声登録してください",
     listeningStarted: "監聴を開始しました",
@@ -367,6 +370,7 @@ export default function App() {
   const [info, setInfo] = useState<string>(t.wakeupHint);
   const [busy, setBusy] = useState(false);
   const [voiceState, setVoiceState] = useState<string>(t.voiceUnregistered);
+  const localVoiceSignatureRef = useRef<number[] | null>(null);
   const [listening, setListening] = useState(false);
   const listeningRef = useRef(false);
 
@@ -514,6 +518,25 @@ export default function App() {
   }, [speakingRipple]);
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const buildLocalSignature = (audioBase64: string) => {
+    const signature = [0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < audioBase64.length; i += 53) {
+      const code = audioBase64.charCodeAt(i);
+      signature[i % signature.length] += code;
+    }
+    return signature.map((n) => n / Math.max(audioBase64.length, 1));
+  };
+  const localSimilarity = (a: number[], b: number[]) => {
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-6);
+  };
   const fetchWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 20000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -651,13 +674,13 @@ export default function App() {
 
     const text = normalizeChineseTime(raw.replace(/\s+/g, ""));
     const now = new Date();
-    const hmMatch = text.match(/(\d{1,2})(?:[:：]|點)([0-5]?\d|半)?(?:分)?/);
+    const hmMatch = text.match(/(\d{1,2})(?:[:：]|點|点)([0-5]?\d|半)?(?:分)?/);
     if (!hmMatch) throw new Error(t.timeNotUnderstood);
     let hour = Number(hmMatch[1]);
     let minute = hmMatch[2] === "半" ? 30 : hmMatch[2] ? Number(hmMatch[2]) : 0;
     if (/下午|晚上/.test(text) && hour < 12) hour += 12;
     if (/凌晨/.test(text) && hour === 12) hour = 0;
-    const dayOffset = /後天/.test(text) ? 2 : /明天/.test(text) ? 1 : 0;
+    const dayOffset = /後天|后天/.test(text) ? 2 : /明天/.test(text) ? 1 : 0;
     const triggerAt = new Date(now);
     triggerAt.setDate(now.getDate() + dayOffset);
     triggerAt.setHours(hour, minute, 0, 0);
@@ -694,8 +717,8 @@ export default function App() {
       feedback(t.reminderCreated, t.tipTitle);
       setActiveTab("提醒");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "設定提醒失敗";
-      setAlarmStatus(`設定失敗：${message}`);
+      const message = error instanceof Error ? error.message : t.reminderSetFailedTitle;
+      setAlarmStatus(`${t.reminderSetFailedTitle}: ${message}`);
       feedback(message, t.reminderSetFailedTitle);
     } finally {
       setBusy(false);
@@ -781,10 +804,27 @@ export default function App() {
       const payload = (await response.json()) as { success?: boolean };
       if (!response.ok || !payload.success) throw new Error(t.voiceRegisterFailed);
       setVoiceState(t.voiceRegistered);
+      localVoiceSignatureRef.current = buildLocalSignature(audioBase64);
       feedback(t.voiceRegisterSuccess, t.tipTitle);
     } catch (error) {
-      setVoiceState(t.voiceRegisterFailed);
-      feedback(error instanceof Error ? error.message : t.voiceRegisterFailed, t.voiceRegisterFailedTitle);
+      const message = error instanceof Error ? error.message : t.voiceRegisterFailed;
+      if (/Network request failed/i.test(message)) {
+        try {
+          const clipUri = await recordClip(2200);
+          const audioBase64 = await FileSystem.readAsStringAsync(clipUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          localVoiceSignatureRef.current = buildLocalSignature(audioBase64);
+          setVoiceState(t.voiceRegistered);
+          feedback(t.voiceRegisterOfflineSuccess, t.tipTitle);
+        } catch {
+          setVoiceState(t.voiceRegisterFailed);
+          feedback(message, t.voiceRegisterFailedTitle);
+        }
+      } else {
+        setVoiceState(t.voiceRegisterFailed);
+        feedback(message, t.voiceRegisterFailedTitle);
+      }
     } finally {
       setBusy(false);
     }
@@ -795,7 +835,7 @@ export default function App() {
       feedback(t.webNoMic, t.tipTitle);
       return;
     }
-    if (voiceState !== t.voiceRegistered) {
+    if (voiceState !== t.voiceRegistered && !localVoiceSignatureRef.current) {
       feedback(t.registerFirstBeforeListen, t.tipTitle);
       return;
     }
@@ -822,8 +862,22 @@ export default function App() {
           setActionLog(`${t.unmatched} (${payload.score.toFixed(2)})`);
         }
       } catch {
-        feedback(t.listeningInterrupted, t.listeningTitle);
-        break;
+        if (!localVoiceSignatureRef.current) {
+          feedback(t.listeningInterrupted, t.listeningTitle);
+          break;
+        }
+        const clipUri = await recordClip(2400);
+        const audioBase64 = await FileSystem.readAsStringAsync(clipUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const score = localSimilarity(localVoiceSignatureRef.current, buildLocalSignature(audioBase64));
+        if (score > 0.82) {
+          setInfo(`${t.recognized} (${score.toFixed(2)})`);
+          setActionLog(`${t.recognizedLog} (${score.toFixed(2)})`);
+        } else {
+          setInfo(`${t.unmatched} (${score.toFixed(2)})`);
+          setActionLog(`${t.unmatched} (${score.toFixed(2)})`);
+        }
       }
     }
     listeningRef.current = false;
@@ -978,7 +1032,7 @@ export default function App() {
     appendHistory("user", cmd);
     const looksLikeAlarm =
       /(提醒|鬧鐘|闹钟|叫我|通知我)/.test(cmd) &&
-      /(明天|後天|今天|早上|上午|下午|晚上|凌晨|\d|[零一二两兩三四五六七八九十]+點|[零一二两兩三四五六七八九十]+:)/.test(cmd);
+      /(明天|後天|后天|今天|早上|上午|下午|晚上|凌晨|\d|[零一二两兩三四五六七八九十]+[點点]|[零一二两兩三四五六七八九十]+:)/.test(cmd);
     if (looksLikeAlarm) {
       setAlarmCommand(cmd);
       return scheduleAlarm();
@@ -1268,11 +1322,6 @@ export default function App() {
 
       {activeTab === "相冊" && (
         <View style={styles.albumScene}>
-          {!photos.length && (
-            <Pressable style={[styles.darkBtn, { marginBottom: 12 }]} onPress={() => void readLatestPhotos()}>
-              <Text style={styles.darkBtnText}>隨機載入一張照片</Text>
-            </Pressable>
-          )}
           <View style={styles.albumFrame}>
             {activePhoto ? (
               <Image source={{ uri: activePhoto.uri }} style={[styles.albumImage, zoomed && styles.albumImageZoom]} />
@@ -1399,7 +1448,7 @@ const styles = StyleSheet.create({
   loginCard: { backgroundColor: "#1c2b4a", borderRadius: 18, padding: 18 },
   loginTitle: { color: "#f8fafc", fontSize: 26, fontWeight: "700", marginBottom: 8 },
   loginHint: { color: "#9fb0cf", fontSize: 14, marginBottom: 14 },
-  phoneRow: { flexDirection: "row", gap: 8, alignItems: "stretch", marginBottom: 10 },
+  phoneRow: { flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 10 },
   countrySelector: {
     height: 44,
     width: 108,
@@ -1423,16 +1472,18 @@ const styles = StyleSheet.create({
   countryOption: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#213556" },
   countryOptionText: { color: "#d8e6ff", fontSize: 14 },
   loginInput: {
-    height: 44,
+    height: 46,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#33496f",
     backgroundColor: "#13233f",
     color: "#f8fafc",
     paddingHorizontal: 12,
+    paddingVertical: 0,
+    textAlignVertical: "center",
     marginBottom: 10,
   },
-  phoneInput: { flex: 1, marginBottom: 0 },
+  phoneInput: { flex: 1, minWidth: 0, marginBottom: 0 },
   loginBtn: { backgroundColor: "#19b889", borderRadius: 12, alignItems: "center", paddingVertical: 12 },
   loginBtnText: { color: "#ecfffa", fontSize: 16, fontWeight: "700" },
   loginDevHint: { color: "#facc15", fontSize: 12, marginBottom: 10 },
