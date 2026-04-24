@@ -1,13 +1,155 @@
 import express from "express";
 import type { ChatMessagePayload } from "@echocare/shared";
+import { createClient } from "@supabase/supabase-js";
+import { Redis } from "@upstash/redis";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 
 const app = express();
 app.use(express.json({ limit: "15mb" }));
 
-type OtpRecord = { code: string; expiresAt: number; attempts: number };
+type OtpRecord = { codeHash: string; expiresAt: number; attempts: number };
 const otpStore = new Map<string, OtpRecord>();
-const OTP_TTL_MS = 5 * 60 * 1000;
+const counterStore = new Map<string, { count: number; expiresAt: number }>();
+const OTP_TTL_SEC = Number(process.env.OTP_TTL_SEC || 300);
+const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS || 5);
+const OTP_RESEND_COOLDOWN_SEC = Number(process.env.OTP_RESEND_COOLDOWN_SEC || 60);
+const OTP_DAILY_LIMIT_PER_PHONE = Number(process.env.OTP_DAILY_LIMIT_PER_PHONE || 10);
+const OTP_MODE = (process.env.OTP_MODE || "mock").toLowerCase();
+const OTP_SECRET = process.env.OTP_SECRET || "echocare-dev-secret";
+const SMS_PROVIDER = (process.env.SMS_PROVIDER || "mock").toLowerCase();
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "";
+const RESEND_FROM_NAME = process.env.RESEND_FROM_NAME || "EchoCare";
+const OTP_EMAIL_TEMPLATE = process.env.OTP_EMAIL_TEMPLATE || "Your EchoCare verification code is {{code}}. It expires in {{ttl}} minutes.";
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const AUTH_USER_TABLE = process.env.AUTH_USER_TABLE || "auth_users";
+const redis =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      })
+    : null;
+const supabase =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
+
+const otpKey = (id: string) => `otp:${id}`;
+const cooldownKey = (id: string) => `otp:cooldown:${id}`;
+const dailyKey = (id: string) => `otp:daily:${id}:${new Date().toISOString().slice(0, 10)}`;
+const ipDailyKey = (ip: string) => `otp:ipdaily:${ip}:${new Date().toISOString().slice(0, 10)}`;
+
+const hashOtp = (identifier: string, code: string) =>
+  createHash("sha256")
+    .update(`${OTP_SECRET}:${identifier}:${code}`)
+    .digest("hex");
+
+const randomCode = () => String(Math.floor(Math.random() * 900000) + 100000);
+
+const getOtp = async (id: string) => {
+  if (redis) {
+    return (await redis.get<OtpRecord>(otpKey(id))) || null;
+  }
+  const data = otpStore.get(id) || null;
+  if (data && data.expiresAt < Date.now()) {
+    otpStore.delete(id);
+    return null;
+  }
+  return data;
+};
+
+const setOtp = async (id: string, data: OtpRecord) => {
+  if (redis) {
+    await redis.set(otpKey(id), data, { ex: OTP_TTL_SEC });
+    return;
+  }
+  otpStore.set(id, data);
+};
+
+const deleteOtp = async (id: string) => {
+  if (redis) {
+    await redis.del(otpKey(id));
+    return;
+  }
+  otpStore.delete(id);
+};
+
+const bumpCounter = async (key: string, ttlSec: number) => {
+  if (redis) {
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, ttlSec);
+    return count;
+  }
+  const now = Date.now();
+  const current = counterStore.get(key);
+  if (!current || current.expiresAt < now) {
+    counterStore.set(key, { count: 1, expiresAt: now + ttlSec * 1000 });
+    return 1;
+  }
+  const next = current.count + 1;
+  counterStore.set(key, { ...current, count: next });
+  return next;
+};
+
+const sendSmsCode = async (phone: string, code: string) => {
+  if (SMS_PROVIDER === "mock") return { sent: false, reason: "provider_not_configured" as const };
+  // Future providers: twilio / tencent / aliyun.
+  console.log(`SMS provider=${SMS_PROVIDER}, to=${phone}, code=${code}`);
+  return { sent: false, reason: "provider_not_implemented" as const };
+};
+
+const sendEmailCode = async (email: string, code: string) => {
+  if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) {
+    return { sent: false, reason: "resend_not_configured" as const };
+  }
+  const ttlMinutes = Math.max(1, Math.floor(OTP_TTL_SEC / 60));
+  const text = OTP_EMAIL_TEMPLATE.replace("{{code}}", code).replace("{{ttl}}", String(ttlMinutes));
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
+        to: [email],
+        subject: "EchoCare verification code",
+        text,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      return { sent: false, reason: `resend_http_${response.status}:${body.slice(0, 120)}` as const };
+    }
+    return { sent: true as const };
+  } catch (error) {
+    return { sent: false, reason: error instanceof Error ? error.message : "resend_request_failed" };
+  }
+};
+
+const saveAuthUser = async (identifier: string, email?: string) => {
+  if (!supabase) {
+    return { saved: false, reason: "supabase_not_configured" as const };
+  }
+  const now = new Date().toISOString();
+  const payload = {
+    identifier,
+    email: email || null,
+    provider: email ? "email_otp" : "phone_otp",
+    last_login_at: now,
+    updated_at: now,
+  };
+  const { error } = await supabase.from(AUTH_USER_TABLE).upsert(payload, { onConflict: "identifier" });
+  if (error) return { saved: false, reason: error.message };
+  return { saved: true as const };
+};
+
 const hashText = (text: string) => {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
@@ -122,53 +264,107 @@ app.post("/v1/avatar/generate", async (req, res) => {
   }
 });
 
-app.post("/v1/auth/send-code", (req, res) => {
-  const { phone } = req.body as { phone?: string };
-  if (!phone || !/^\+\d{6,15}$/.test(phone)) {
+app.post("/v1/auth/send-code", async (req, res) => {
+  const { phone, email } = req.body as { phone?: string; email?: string };
+  const normalizedEmail = email?.trim().toLowerCase();
+  const identifier = phone?.trim() || normalizedEmail;
+  const isPhone = Boolean(phone?.trim());
+  const isEmail = Boolean(normalizedEmail);
+  if (!identifier) {
+    res.status(400).json({ error: "phone or email required" });
+    return;
+  }
+  if (isPhone && !/^\+\d{6,15}$/.test(identifier)) {
     res.status(400).json({ error: "valid phone required" });
     return;
   }
-  const code = String(Math.floor(Math.random() * 900000) + 100000);
-  const now = Date.now();
-  otpStore.set(phone, { code, expiresAt: now + OTP_TTL_MS, attempts: 0 });
+  if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+    res.status(400).json({ error: "valid email required" });
+    return;
+  }
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const cooldownCount = await bumpCounter(cooldownKey(identifier), OTP_RESEND_COOLDOWN_SEC);
+  if (cooldownCount > 1) {
+    res.status(429).json({ error: "please wait before requesting another code", cooldownSec: OTP_RESEND_COOLDOWN_SEC });
+    return;
+  }
+  const phoneDailyCount = await bumpCounter(dailyKey(identifier), 24 * 60 * 60);
+  if (phoneDailyCount > OTP_DAILY_LIMIT_PER_PHONE) {
+    res.status(429).json({ error: "daily send limit reached" });
+    return;
+  }
+  const ipDailyCount = await bumpCounter(ipDailyKey(ip), 24 * 60 * 60);
+  if (ipDailyCount > OTP_DAILY_LIMIT_PER_PHONE * 3) {
+    res.status(429).json({ error: "ip daily send limit reached" });
+    return;
+  }
+
+  const code = randomCode();
+  const expiresAt = Date.now() + OTP_TTL_SEC * 1000;
+  await setOtp(identifier, { codeHash: hashOtp(identifier, code), expiresAt, attempts: 0 });
+
+  if (OTP_MODE === "live") {
+    if (isEmail) {
+      const sent = await sendEmailCode(identifier, code);
+      if (!sent.sent) {
+        res.status(503).json({ error: `email send failed (${sent.reason})` });
+        return;
+      }
+    } else if (isPhone) {
+      const sent = await sendSmsCode(identifier, code);
+      if (!sent.sent) {
+        res.status(503).json({ error: `sms send failed (${sent.reason})` });
+        return;
+      }
+    }
+  }
+
   res.json({
     success: true,
-    expiresInSec: OTP_TTL_MS / 1000,
-    // Demo-only fallback for local/dev. Remove once a real SMS provider is integrated.
-    debugCode: process.env.NODE_ENV === "production" ? undefined : code,
+    expiresInSec: OTP_TTL_SEC,
+    cooldownSec: OTP_RESEND_COOLDOWN_SEC,
+    debugCode: OTP_MODE === "mock" && process.env.NODE_ENV !== "production" ? code : undefined,
+    mode: OTP_MODE,
+    redisEnabled: Boolean(redis),
   });
 });
 
-app.post("/v1/auth/verify-code", (req, res) => {
-  const { phone, code } = req.body as { phone?: string; code?: string };
-  if (!phone || !code) {
-    res.status(400).json({ error: "phone and code required" });
+app.post("/v1/auth/verify-code", async (req, res) => {
+  const { phone, email, code } = req.body as { phone?: string; email?: string; code?: string };
+  const identifier = phone?.trim() || email?.trim().toLowerCase();
+  if (!identifier || !code) {
+    res.status(400).json({ error: "phone/email and code required" });
     return;
   }
-  const record = otpStore.get(phone);
+  const record = await getOtp(identifier);
   if (!record) {
     res.status(404).json({ error: "code not sent or expired" });
     return;
   }
   const now = Date.now();
   if (record.expiresAt < now) {
-    otpStore.delete(phone);
+    await deleteOtp(identifier);
     res.status(410).json({ error: "code expired" });
     return;
   }
-  if (record.attempts >= 5) {
-    otpStore.delete(phone);
+  if (record.attempts >= OTP_MAX_ATTEMPTS) {
+    await deleteOtp(identifier);
     res.status(429).json({ error: "too many attempts" });
     return;
   }
-  if (record.code !== code) {
-    record.attempts += 1;
-    otpStore.set(phone, record);
+  if (record.codeHash !== hashOtp(identifier, code)) {
+    const next = { ...record, attempts: record.attempts + 1 };
+    await setOtp(identifier, next);
     res.status(401).json({ error: "invalid code" });
     return;
   }
-  otpStore.delete(phone);
-  res.json({ success: true, token: `demo-token-${Buffer.from(phone).toString("base64")}` });
+  await deleteOtp(identifier);
+  const save = await saveAuthUser(identifier, email?.trim().toLowerCase());
+  if (!save.saved) {
+    res.status(500).json({ error: `login succeeded but user save failed (${save.reason})` });
+    return;
+  }
+  res.json({ success: true, token: `demo-token-${Buffer.from(identifier).toString("base64")}` });
 });
 
 app.post("/v1/vision/describe", (req, res) => {

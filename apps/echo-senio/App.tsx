@@ -17,12 +17,6 @@ type Locale = "zh" | "en" | "ja";
 type ChatRecord = { id: string; role: "assistant" | "user"; text: string; createdAt: number };
 
 const tabs: AppTab[] = ["陪伴", "確認", "提醒", "相冊", "社區", "檔案"];
-const localeByPhone = (phone: string): Locale => {
-  if (phone.startsWith("+86")) return "zh";
-  if (phone.startsWith("+81")) return "ja";
-  return "en";
-};
-
 const I18N = {
   zh: {
     loginTitle: "EchoCare 登录",
@@ -351,9 +345,7 @@ export default function App() {
   const channel = useMemo(() => familyRoomChannel("demo-family"), []);
   const [locale, setLocale] = useState<Locale>("en");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [countryCode, setCountryCode] = useState("+86");
-  const [showCountryMenu, setShowCountryMenu] = useState(false);
-  const [phoneInput, setPhoneInput] = useState("");
+  const [emailInput, setEmailInput] = useState("");
   const [smsCodeInput, setSmsCodeInput] = useState("");
   const [debugCodeHint, setDebugCodeHint] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -576,33 +568,29 @@ export default function App() {
     Alert.alert(title, message);
   };
 
-  const fullPhone = `${countryCode}${phoneInput.trim()}`;
-  const sendSmsCode = async () => {
-    if (!/^\d{5,14}$/.test(phoneInput.trim())) {
-      Alert.alert("Invalid Phone", "Please enter a valid phone number.");
+  const sendEmailCode = async () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
       return;
     }
-    // SMS sending is temporarily disabled for local demo.
-    // try {
-    //   setBusy(true);
-    //   const response = await requestApi("/v1/auth/send-code", {
-    //     method: "POST",
-    //     headers: { "content-type": "application/json" },
-    //     body: JSON.stringify({ phone: fullPhone }),
-    //   });
-    //   const payload = (await response.json()) as { success?: boolean; debugCode?: string; error?: string };
-    //   if (!response.ok || !payload.success) throw new Error(payload.error || "Failed to send verification code.");
-    //   setCodeSent(true);
-    //   setDebugCodeHint(payload.debugCode ? `Dev code: ${payload.debugCode}` : "");
-    //   Alert.alert("Code Sent", "Verification code sent. Please check your messages.");
-    // } catch (error) {
-    //   Alert.alert("Send Failed", error instanceof Error ? error.message : "Failed to send verification code.");
-    // } finally {
-    //   setBusy(false);
-    // }
-    setCodeSent(true);
-    setDebugCodeHint("Demo mode: enter any 6-digit code to sign in.");
-    Alert.alert("Demo Mode", "SMS sending is disabled. Enter any 6-digit code to continue.");
+    try {
+      setBusy(true);
+      const response = await requestApi("/v1/auth/send-code", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = (await response.json()) as { success?: boolean; debugCode?: string; error?: string };
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Failed to send verification code.");
+      setCodeSent(true);
+      setDebugCodeHint(payload.debugCode ? `Dev code: ${payload.debugCode}` : "");
+      Alert.alert("Code Sent", "Verification code sent. Please check your inbox.");
+    } catch (error) {
+      Alert.alert("Send Failed", error instanceof Error ? error.message : "Failed to send verification code.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleLogin = async () => {
@@ -610,28 +598,25 @@ export default function App() {
       Alert.alert("Invalid Code", "Please enter the verification code.");
       return;
     }
-    // Verification API is temporarily disabled for local demo.
-    // try {
-    //   setBusy(true);
-    //   const response = await requestApi("/v1/auth/verify-code", {
-    //     method: "POST",
-    //     headers: { "content-type": "application/json" },
-    //     body: JSON.stringify({ phone: fullPhone, code: smsCodeInput.trim() }),
-    //   });
-    //   const payload = (await response.json()) as { success?: boolean; error?: string };
-    //   if (!response.ok || !payload.success) throw new Error(payload.error || "Verification failed.");
-    // } catch (error) {
-    //   Alert.alert("Login Failed", error instanceof Error ? error.message : "Verification failed.");
-    //   return;
-    // } finally {
-    //   setBusy(false);
-    // }
-    const detected = localeByPhone(fullPhone);
-    setLocale(detected);
-    setIsLoggedIn(true);
-    const nextT = I18N[detected];
-    setInfo(nextT.wakeupHint);
-    setActionLog(nextT.localeSwitched);
+    try {
+      setBusy(true);
+      const response = await requestApi("/v1/auth/verify-code", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim().toLowerCase(), code: smsCodeInput.trim() }),
+      });
+      const payload = (await response.json()) as { success?: boolean; error?: string };
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Verification failed.");
+      setLocale("en");
+      setIsLoggedIn(true);
+      const nextT = I18N.en;
+      setInfo(nextT.wakeupHint);
+      setActionLog("Language set to English");
+    } catch (error) {
+      Alert.alert("Login Failed", error instanceof Error ? error.message : "Verification failed.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const recordClip = async (durationMs: number) => {
@@ -1077,43 +1062,23 @@ export default function App() {
         <StatusBar style="light" />
         <View style={styles.loginCard}>
           <Text style={styles.loginTitle}>{t.loginTitle}</Text>
-          <Text style={styles.loginHint}>Choose country code, enter phone, and sign in with SMS verification.</Text>
-          <View style={styles.phoneRow}>
-            <Pressable style={styles.countrySelector} onPress={() => setShowCountryMenu((v) => !v)}>
-              <Text style={styles.countrySelectorText}>{countryCode} ▾</Text>
-            </Pressable>
-            <TextInput
-              value={phoneInput}
-              onChangeText={setPhoneInput}
-              placeholder="Phone number"
-              placeholderTextColor="#8fa1bf"
-              style={[styles.loginInput, styles.phoneInput]}
-              keyboardType="phone-pad"
-            />
-          </View>
-          {showCountryMenu && (
-            <View style={styles.countryMenu}>
-              {["+86", "+81", "+1", "+44", "+65"].map((code) => (
-                <Pressable
-                  key={code}
-                  style={styles.countryOption}
-                  onPress={() => {
-                    setCountryCode(code);
-                    setShowCountryMenu(false);
-                  }}
-                >
-                  <Text style={styles.countryOptionText}>{code}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-          <Pressable style={[styles.loginBtn, busy && styles.btnDisabled]} onPress={sendSmsCode} disabled={busy}>
+          <Text style={styles.loginHint}>Enter email and sign in with verification code.</Text>
+          <TextInput
+            value={emailInput}
+            onChangeText={setEmailInput}
+            placeholder="Email address"
+            placeholderTextColor="#8fa1bf"
+            style={styles.loginInput}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <Pressable style={[styles.loginBtn, busy && styles.btnDisabled]} onPress={sendEmailCode} disabled={busy}>
             <Text style={styles.loginBtnText}>{codeSent ? "Resend Code" : "Send Code"}</Text>
           </Pressable>
           <TextInput
             value={smsCodeInput}
             onChangeText={setSmsCodeInput}
-            placeholder="SMS verification code"
+            placeholder="Email verification code"
             placeholderTextColor="#8fa1bf"
             style={styles.loginInput}
             keyboardType="number-pad"
@@ -1448,29 +1413,6 @@ const styles = StyleSheet.create({
   loginCard: { backgroundColor: "#1c2b4a", borderRadius: 18, padding: 18 },
   loginTitle: { color: "#f8fafc", fontSize: 26, fontWeight: "700", marginBottom: 8 },
   loginHint: { color: "#9fb0cf", fontSize: 14, marginBottom: 14 },
-  phoneRow: { flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 10 },
-  countrySelector: {
-    height: 44,
-    width: 108,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#33496f",
-    backgroundColor: "#13233f",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    marginBottom: 0,
-  },
-  countrySelectorText: { color: "#f8fafc", fontSize: 14, fontWeight: "600" },
-  countryMenu: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#33496f",
-    backgroundColor: "#13233f",
-    marginBottom: 10,
-    overflow: "hidden",
-  },
-  countryOption: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#213556" },
-  countryOptionText: { color: "#d8e6ff", fontSize: 14 },
   loginInput: {
     height: 46,
     borderRadius: 12,
@@ -1483,7 +1425,6 @@ const styles = StyleSheet.create({
     textAlignVertical: "center",
     marginBottom: 10,
   },
-  phoneInput: { flex: 1, minWidth: 0, marginBottom: 0 },
   loginBtn: { backgroundColor: "#19b889", borderRadius: 12, alignItems: "center", paddingVertical: 12 },
   loginBtnText: { color: "#ecfffa", fontSize: 16, fontWeight: "700" },
   loginDevHint: { color: "#facc15", fontSize: 12, marginBottom: 10 },
